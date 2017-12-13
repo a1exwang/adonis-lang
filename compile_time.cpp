@@ -327,6 +327,25 @@ llvm::Value *al::CompileTime::castStringToValuePtr(llvm::Value *strVal) {
   return valObj;
 }
 
+llvm::Value *al::CompileTime::createNullValuePtr() {
+  auto valObj = builder.CreateAlloca(
+      getValueType(),
+      0,
+      ConstantInt::get(Type::getInt32Ty(theContext), 1)
+  );
+  // val.type = ValueType::Null
+  builder.CreateStore(
+      ConstantInt::get(Type::getInt32Ty(theContext), al::ValueType::Null),
+      builder.CreateGEP(
+          getValueType(),
+          valObj,
+          {ConstantInt::get(Type::getInt32Ty(theContext), 0),
+           ConstantInt::get(Type::getInt32Ty(theContext), 0)}
+      )
+  );
+  return valObj;
+}
+
 //llvm::Value *al::CompileTime::castToValuePtr(llvm::Value *val) {
 //  return BitCastInst::CreatePointerCast(val, getValuePtrType());
 //}

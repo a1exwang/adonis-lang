@@ -85,11 +85,12 @@ DLLEXPORT void AL__callFunction(uint64_t _prt, uint64_t _pname, uint64_t nargs, 
   }
   auto mod = wtf->second;
   auto func = mod->getFunction(fnName);
+  func->dump();
 
   EE->addModule(move(unique_ptr<llvm::Module>(mod)));
   vector<GenericValue> gvs;
   for (auto p : params) {
-    gvs.push_back(GenericValue((llvm::Value*)p));
+    gvs.emplace_back((llvm::Value*)p);
   }
   EE->runFunction(func, gvs);
 }
@@ -132,9 +133,7 @@ DLLEXPORT void AL__insertFunction(uint64_t _rt, uint64_t _name) {
   verifyFunction(*func);
 
 }
-
 }
-
 
 
 int main() {

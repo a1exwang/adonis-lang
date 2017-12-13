@@ -19,6 +19,7 @@ namespace al {
     Value *pVal;
   };
   enum ValueType {
+    Null = 0,
     Integer = 0,
     String,
     Array
@@ -55,6 +56,7 @@ namespace al {
     llvm::BasicBlock* createFunctionBody(llvm::Module &module, const std::string &name);
     llvm::Module* getMainModule() const;
 
+    llvm::Value *createNullValuePtr();
     llvm::Value *createStringValuePtr(const std::string &s, llvm::IRBuilder<> &builder);
     llvm::Value *castStringToValuePtr(llvm::Value *);
 
