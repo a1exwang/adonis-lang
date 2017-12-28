@@ -3,6 +3,7 @@
 //
 
 #include "lex.h"
+#include <tuple>
 
 bool al::Lexer::parseQuoteString(std::string &str, std::string eos) {
   string content;
@@ -34,50 +35,107 @@ bool al::Lexer::parseQuoteString(std::string &str, std::string eos) {
 }
 
 al::Parser::symbol_type al::Lexer::lex() {
-  string regs[] = {
-      "\\s+",
-      "\\(",
-      R"(\))",
-      "'",
-      R"(\w(\w|\d|[-_+=?!@#$%^&*])*)",
-      "\\d+",
-  };
-  std::function<Parser::symbol_type (const std::string &s)> fns[] = {
-      nullptr,
-      [](const std::string &s) -> Parser::symbol_type {
-        return Parser::make_LEFTPAR(Parser::location_type());
+  typedef std::function<Parser::symbol_type (const std::string &s)> LexFn;
+  std::tuple<string, LexFn> tuples[] = {
+      {"\\s+", nullptr},
+      {
+          "\\(",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_LEFTPAR(Parser::location_type());
+          }
       },
-      [](const std::string &s) -> Parser::symbol_type {
-        return Parser::make_RIGHTPAR(Parser::location_type());
+      {
+          "\\)",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_RIGHTPAR(Parser::location_type());
+          }
       },
-      [this](const std::string &s) -> Parser::symbol_type {
-        std::string result;
-        if (!this->parseQuoteString(result, "'"))
-          throw "failed to parse quote string";
+      {
+          "\"",
+          [this](const std::string &s) -> Parser::symbol_type {
+            std::string result;
+            if (!this->parseQuoteString(result, "'"))
+              throw "failed to parse quote string";
 
-        auto p = std::make_shared<ast::StringLiteral>(result);
-        return Parser::make_STRING(p, Parser::location_type());
+            auto p = std::make_shared<ast::StringLiteral>(result);
+            return Parser::make_STRING_LIT(p, Parser::location_type());
+          }
       },
-      [](const std::string &s) -> Parser::symbol_type {
-        auto p = std::make_shared<ast::Symbol>(s);
-        return Parser::make_SYMBOL(p, Parser::location_type());
+      {
+          "\\!",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_BANG(Parser::location_type());
+          }
       },
-      [](const std::string &s) -> Parser::symbol_type {
-        return Parser::make_INT(s, Parser::location_type());
+      {
+          "\\+",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_PLUS(Parser::location_type());
+          }
       },
+      {
+          "\\.",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_DOT(Parser::location_type());
+          }
+      },
+
+      // Keywords
+      {
+          "fn",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_FN(Parser::location_type());
+          }
+      },
+      {
+          "struct",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_STRUCT(Parser::location_type());
+          }
+      },
+      {
+          "nv",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_NV(Parser::location_type());
+          }
+      },
+      {
+          "ref",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_REF(Parser::location_type());
+          }
+      },
+
+      // General Tokens
+      {
+          R"(\\d+)",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_INT_LIT(s, Parser::location_type());
+          }
+      },
+      {
+          "[A-Za-z]\\w*",
+          [](const std::string &s) -> Parser::symbol_type {
+            auto p = std::make_shared<ast::Symbol>(s);
+            return Parser::make_SYMBOL_LIT(p, Parser::location_type());
+          },
+
+      }
   };
   if (input.empty()) {
     return al::Parser::make_END(Parser::location_type());
   }
 
   int i = 0;
-  for (const auto &reg: regs) {
+  string reg;
+  LexFn fn;
+  for (auto &tuple: tuples) {
+    std::tie(reg, fn) = tuple;
     string var;
-    int value;
-    if (RE2::Consume(&input, "(" + reg + ")", &var)) {
+    if (RE2::Consume(&input,"(" + reg + ")", &var)) {
       // FIXME: i == 0 for blank characters
       if (i != 0)
-        return fns[i](var);
+        return fn(var);
     }
     i++;
   }

@@ -60,6 +60,30 @@ namespace al {
       std::vector<std::shared_ptr<ASTNode>> children;
     };
 
+    class Block :public ASTNode {
+    };
+    class Blocks :public ASTNode {
+    public:
+      std::shared_ptr<Blocks> append(const std::shared_ptr<Block> p) {
+        return nullptr;
+      }
+    };
+
+    class FnBlock :public Block {
+    };
+    class Symbol;
+    class Type;
+    class StructBlock :public Block {
+    public:
+//      StructBlock(std::shared_ptr<Symbol> sym,
+//                  std::vector<std::shared_ptr<Symbol>, std::shared_ptr<Type>> items) {
+//
+//      }
+    };
+    class Type :public ASTNode {
+
+    };
+
     class Exp :public ASTNode {
     };
 

@@ -48,34 +48,92 @@
 %define parse.trace
 %define parse.error verbose
 
-%token <std::shared_ptr<al::ast::StringLiteral>> STRING
-%token <std::shared_ptr<al::ast::Symbol>> SYMBOL
-%token <std::string> INT
+%token <std::shared_ptr<al::ast::StringLiteral>> STRING_LIT
+%token <std::shared_ptr<al::ast::Symbol>> SYMBOL_LIT
+%token <std::string> INT_LIT
 %token QUOTE "'";
 %token LEFTPAR "(";
 %token RIGHTPAR ")";
+%token PLUS
+%token EQ
+%token RIGHT_ARROW "->";
+%token LEFTBRACE RIGHTBRACE
+%token COLON COMMA BANG DOT
+%token FN REF NV STRUCT LET
 %token SEMICOLON ";";
+
 %token END 0 "end of file"
 
 %type< std::shared_ptr<al::ast::Exp> > exp;
-%type< std::shared_ptr<al::ast::ExpList> > exp_list;
-%type< std::shared_ptr<al::ast::List> > list;
+%type< std::shared_ptr<al::ast::ExpList> > exps;
+%type< std::shared_ptr<al::ast::Blocks> > blocks;
+
+%type< std::shared_ptr<al::ast::Block> > block;
+%type< std::shared_ptr<al::ast::FnBlock> > fn_block;
+
+%type< std::shared_ptr<al::ast::StructBlock> > struct_block;
+%type< std::vector<std::tuple<std::string, std::shared_ptr<al::ast::Type>>> > struct_elements;
+%type< std::tuple<std::shared_ptr<al::ast::Symbol>, std::shared_ptr<al::ast::Type>> > struct_element;
+%type< std::tuple<std::shared_ptr<al::ast::Symbol>, std::shared_ptr<al::ast::Type>> > var_decl;
 
 %start program
 
 %%
 
-program : exp { rt.setASTRoot($1); }
+program : blocks { rt.setASTRoot($1); }
 
-exp: list { $$ = $1; }
-    | SYMBOL { $$ = $1; }
-    | STRING { $$ = $1; }
-    ;
+blocks: { $$ = std::make_shared<al::ast::Blocks>(); }
+    | block blocks { $$ = $2->append($1); }
 
-list: LEFTPAR exp_list RIGHTPAR { $$ = std::make_shared<al::ast::List>($2); }
+block: struct_block { $$ = $1; }
+    | fn_block { $$ = $1; }
 
-exp_list: { $$ = std::make_shared<al::ast::ExpList>(); }
-    | exp exp_list { $$ = $2->prepend($1); }
+/* struct_block:
+ *  struct User {
+ *    name: string,
+ *    name1: string,
+ *  }
+ */
+struct_block: STRUCT SYMBOL_LIT LEFTBRACE struct_elements RIGHTBRACE {
+    //$$ = std::make_shared<al::ast::StructBlock>($2, $4);
+  }
+struct_elements:
+    | struct_element struct_elements
+struct_element: var_decl COMMA
+
+/* fn_block
+ * fn add(a: int, b: int) int {
+ *    a + b
+ * }
+ */
+fn_block: FN SYMBOL_LIT LEFTPAR fn_args RIGHTPAR type stmt_block
+fn_args:
+    | fn_arg fn_args
+fn_arg: var_decl COMMA
+
+stmt_block: LEFTBRACE stmts RIGHTBRACE
+stmts:
+    | stmt stmts
+stmt: exp SEMICOLON
+    | LET SYMBOL_LIT EQ exp SEMICOLON
+
+exp: exp_call
+    | exp_ctor
+    | exp_nvctor
+    | exp_op
+
+exp_call: SYMBOL_LIT LEFTPAR exps RIGHTPAR
+exp_ctor: SYMBOL_LIT LEFTBRACE exps RIGHTBRACE
+exp_nvctor: SYMBOL_LIT BANG LEFTBRACE exps RIGHTBRACE
+exp_op: exp PLUS exp
+
+exps: exp
+    | exp exps
+
+var_decl: SYMBOL_LIT COLON type
+type: SYMBOL_LIT
+    | REF SYMBOL_LIT
+    | NV REF SYMBOL_LIT
 
 %%
 void al::Parser::error(const location &loc , const std::string &message) {

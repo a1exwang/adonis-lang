@@ -85,7 +85,7 @@ DLLEXPORT void AL__callFunction(uint64_t _prt, uint64_t _pname, uint64_t nargs, 
   }
   auto mod = wtf->second;
   auto func = mod->getFunction(fnName);
-  func->dump();
+//  func->dump();
 
   EE->addModule(move(unique_ptr<llvm::Module>(mod)));
   vector<GenericValue> gvs;
@@ -145,7 +145,7 @@ int main() {
 
   al::CompileTime rt;
 
-  ifstream ifs("/home/alexwang/dev/proj/cpp/al/hello.al");
+  ifstream ifs("/home/alexwang/dev/proj/cpp/adonis-lang/nvm.al");
   std::string str((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
 
   al::Lexer lexer(str);
