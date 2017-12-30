@@ -137,12 +137,6 @@ DLLEXPORT void AL__insertFunction(uint64_t _rt, uint64_t _name) {
 
 
 int main() {
-  // Initialize interpreter
-  LLVMLinkInMCJIT();
-  InitializeNativeTarget();
-  InitializeNativeTargetAsmPrinter();
-
-
   al::CompileTime rt;
 
   ifstream ifs("/home/alexwang/dev/proj/cpp/adonis-lang/nvm.al");
@@ -152,12 +146,16 @@ int main() {
   al::Parser parser(lexer, rt);
   parser.parse();
 
-  rt.init();
+  /**
+   * AST passes
+   */
+  rt.init1();
   rt.traverse1();
+  rt.finish1();
 
-  rt.finish();
-
-  std::error_code ec;
+  /**
+   * Save LLVM IR to file
+   */
   string s;
   raw_string_ostream s1(s);
 //  rt.getMainModule()->print(errs(), nullptr);
@@ -166,8 +164,12 @@ int main() {
   ofstream fs("test.ll");
   fs << s;
 
-  // start interpreter
-
+  /**
+   * Start LLVM JIT Compiler Interpreter
+   */
+  LLVMLinkInMCJIT();
+  InitializeNativeTarget();
+  InitializeNativeTargetAsmPrinter();
   auto mainFunc = rt.getMainFunc();
   auto mainModule = rt.moveMainModule();
   EngineBuilder eb(move(mainModule));

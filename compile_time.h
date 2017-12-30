@@ -42,8 +42,8 @@ namespace al {
     void setASTRoot(std::shared_ptr<ast::ASTNode> root) {
       this->root = std::move(root);
     }
-    void init();
-    void finish();
+    void init1();
+    void finish1();
     void createFunction(llvm::Module &module, const std::string &name, std::vector<std::string> paramNames);
     void setupMainModule();
     void createFnFunc();

@@ -45,9 +45,33 @@ al::Parser::symbol_type al::Lexer::lex() {
           }
       },
       {
+          "\\:",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_COLON(Parser::location_type());
+          }
+      },
+      {
+          "\\;",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_SEMICOLON(Parser::location_type());
+          }
+      },
+      {
           "\\)",
           [](const std::string &s) -> Parser::symbol_type {
             return Parser::make_RIGHTPAR(Parser::location_type());
+          }
+      },
+      {
+          "\\{",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_LEFTBRACE(Parser::location_type());
+          }
+      },
+      {
+          "\\}",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_RIGHTBRACE(Parser::location_type());
           }
       },
       {
@@ -74,6 +98,12 @@ al::Parser::symbol_type al::Lexer::lex() {
           }
       },
       {
+          "\\=",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_EQ(Parser::location_type());
+          }
+      },
+      {
           "\\.",
           [](const std::string &s) -> Parser::symbol_type {
             return Parser::make_DOT(Parser::location_type());
@@ -94,6 +124,12 @@ al::Parser::symbol_type al::Lexer::lex() {
           }
       },
       {
+          "persistent",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_PERSISTENT(Parser::location_type());
+          }
+      },
+      {
           "nv",
           [](const std::string &s) -> Parser::symbol_type {
             return Parser::make_NV(Parser::location_type());
@@ -108,9 +144,9 @@ al::Parser::symbol_type al::Lexer::lex() {
 
       // General Tokens
       {
-          R"(\\d+)",
+          "\\d+",
           [](const std::string &s) -> Parser::symbol_type {
-            return Parser::make_INT_LIT(s, Parser::location_type());
+            return Parser::make_INT_LIT(std::make_shared<al::ast::IntLiteral>(s), Parser::location_type());
           }
       },
       {
@@ -140,5 +176,11 @@ al::Parser::symbol_type al::Lexer::lex() {
     i++;
   }
 
-  throw "wtf";
+  if (input.empty()) {
+    return al::Parser::make_END(Parser::location_type());
+  }
+
+  cerr << "input not parseable" << endl;
+  cerr << input.ToString() << endl;
+  abort();
 }

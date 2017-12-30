@@ -165,6 +165,19 @@ namespace al {
     void List::post_visit(CompileTime &) {
       decIndent();
     }
+
+    std::shared_ptr<VarDecls> VarDecls::append(std::shared_ptr<VarDecl> child) {
+      std::shared_ptr<VarDecls> ret = std::make_shared<VarDecls>();
+      *ret = *this;
+      ret->decls.push_back(child);
+      return ret;
+    }
+
+    Type::Type(std::shared_ptr<Symbol> symbol) :symbol(symbol) {
+
+    }
+
+    ExpCall::ExpCall(std::shared_ptr<Symbol> name, std::vector<std::shared_ptr<Exp>> exps) :name(name->getName()), exps(exps) {}
   }
 }
 

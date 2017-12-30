@@ -1,17 +1,11 @@
 
-struct Attr {
-  key: string,
-  value: string,
+persistent {
+  pCounter: int;
 }
 
-struct User {
-  id: int,
-  name: string,
-  description: string,
-  attr: ref Attr,
+
+fn main() {
+  puts(pCounter);
+  pCounter = pCounter + 1;
 }
 
-fn onRequest(name: string) string {
-  let u = User !{1, name, "wtf", Attr !{"gender", "male",}};
-  u.name + "(" + u.attr.key + ":" + u.attr.value + ")";
-}

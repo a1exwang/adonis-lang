@@ -137,7 +137,7 @@ void al::CompileTime::createPrimitiveTypes() {
 
 }
 
-void al::CompileTime::init() {
+void al::CompileTime::init1() {
   setupMainModule();
   createPrimitiveTypes();
   createLibFunc();
@@ -226,7 +226,7 @@ llvm::PointerType *al::CompileTime::getValuePtrType() {
 al::CompileTime::~CompileTime() {
 }
 
-void al::CompileTime::finish() {
+void al::CompileTime::finish1() {
   /* Generate call entry function */
 //  FunctionType *ft = FunctionType::get(
 //      Type::getVoidTy(theContext), {
