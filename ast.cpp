@@ -175,34 +175,76 @@ namespace al {
         auto vr = exp->visit(ct);
         args.push_back(vr.value);
       }
-      auto rhs = dynamic_pointer_cast<Exp>(exps[1]);
 
       Function *fn = nullptr;
+      /**
+       * Assignment Operator is a special operator
+       */
       if (this->name == "=") {
+        auto rhs = dynamic_pointer_cast<Exp>(exps[1]);
         if (args.size() != 2) { cerr << "'=' only accepts 2 args" << endl; abort(); }
         auto ptr = dynamic_pointer_cast<ExpVarRef>(exps[0]);
         if (ptr == nullptr) {
-          auto expMemberAcc = dynamic_pointer_cast<ExpMemberAccess>(exps[0]);
-          if (expMemberAcc == nullptr) {
+          auto lhs = dynamic_pointer_cast<ExpMemberAccess>(exps[0]);
+          if (lhs == nullptr) {
             cerr << "'=' operator accepts a symbol as the first arg" << endl;
             abort();
           }
-          // TODO
-          ct.getCompilerContext().builder->CreateStore(
-              rhs->getVR().value,
-              expMemberAcc->getVR().gepResult
-          );
+          auto elementType =
+              static_cast<llvm::PointerType*>(lhs->getVR().gepResult->getType())->getElementType();
+
+          // TODO support more types
+          if (elementType->isIntegerTy(32)) {
+            ct.getCompilerContext().builder->CreateStore(
+                rhs->getVR().value,
+                lhs->getVR().gepResult
+            );
+          }
+          else if (elementType->isStructTy()) {
+            auto lhsPtr = lhs->getVR().gepResult;
+            auto rhsPtr = rhs->getVR().gepResult;
+            ct.getCompilerContext().builder->CreateMemCpy(
+                lhsPtr,
+                rhsPtr,
+                CompileTime::getStructSize(
+                    *ct.getCompilerContext().builder,
+                    static_cast<PointerType*>(rhsPtr->getType())->getElementType()),
+                8
+            );
+            vr.gepResult = rhsPtr;
+          }
+          else {
+            cerr << "type not supported" << endl;
+            elementType->dump();
+            abort();
+          }
           vr.value = rhs->getVR().value;
 
           // commit
-          ct.createSetMemNvmVar(expMemberAcc->getObjName(), expMemberAcc->getVR().gepResult);
+          ct.createSetMemNvmVar(lhs->getObjName(), lhs->getVR().gepResult);
           return vr;
-
         } else {
           auto varName = ptr->getName();
 
           if (ct.hasPersistentVar(varName)) {
-            ct.createSetPersistentVar(varName, args[1]);
+            if (ct.getPersistentVarType(varName) == "int32") {
+              ct.createSetPersistentVar(varName, args[1]);
+            }
+            else {
+              auto lhsPtr = ct.createGetMemNvmVar(varName);
+              auto lhsType = ct.getType(ct.getPersistentVarType(varName));
+              auto rhsPtr = rhs->getVR().gepResult;
+              ct.getCompilerContext().builder->CreateMemCpy(
+                  lhsPtr,
+                  rhsPtr,
+                  CompileTime::getStructSize(
+                      *ct.getCompilerContext().builder,
+                      lhsType.llvmType
+                  ),
+                  8
+              );
+              vr.gepResult = rhsPtr;
+            }
           }
           VisitResult vr;
           vr.value = args[1];
@@ -266,7 +308,16 @@ namespace al {
 
     VisitResult ExpVarRef::visit(CompileTime &ct) {
       if (ct.hasPersistentVar(this->name->getName())) {
-        vr.value = ct.createGetIntNvmVar(this->name->getName());
+        auto type = ct.getPersistentVarType(this->name->getName());
+        if (ct.getType(type).llvmType->isStructTy()) {
+          vr.gepResult = ct.createGetMemNvmVar(this->name->getName());
+        }
+        else if (ct.getType(type).name == "int32") {
+          vr.value = ct.createGetIntNvmVar(this->name->getName());
+        }
+        else {
+          cerr << "persistent var type not supported '" << this->name->getName() << "'" << endl;
+        }
       }
       else {
         vr.value = ct.getMainModule()->getGlobalVariable(this->name->getName());

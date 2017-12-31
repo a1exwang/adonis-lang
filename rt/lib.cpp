@@ -8,6 +8,7 @@
 #include <vector>
 #include <iostream>
 #include <sstream>
+#include <chrono>
 
 #include "../nvm_malloc/src/nvm_malloc.h"
 

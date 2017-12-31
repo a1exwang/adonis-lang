@@ -514,6 +514,22 @@ void al::CompileTime::createSetMemNvmVar(const std::string &name, llvm::Value *p
   );
 }
 
+llvm::Value *al::CompileTime::getStructSize(IRBuilder<> &builder, llvm::Type *s) {
+  if (!s->isStructTy()) {
+    cerr << "not a struct" << endl;
+    abort();
+  }
+  auto sizeVal = builder.CreatePtrToInt(
+      builder.CreateGEP(
+          s,
+          ConstantPointerNull::get(PointerType::get(s, 0)),
+          ConstantInt::get(Type::getInt32Ty(builder.getContext()), 1)
+      ),
+      Type::getInt64Ty(builder.getContext())
+  );
+  return sizeVal;
+}
+
 //llvm::Value *al::CompileTime::castToValuePtr(llvm::Value *val) {
 //  return BitCastInst::CreatePointerCast(val, getValuePtrType());
 //}

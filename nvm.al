@@ -10,9 +10,11 @@ persistent {
 }
 
 fn main() {
-  p_0 = p_0 + 1;
-  putsInt(p_0);
-
   p_user_1.counter = p_user_1.counter + 1;
-  putsInt(p_user_1.counter);
+  p_user_1.id = p_user_1.id + 1;
+
+  p_user_2 = p_user_1;
+
+  putsInt(p_user_2.id);
+  putsInt(p_user_2.counter);
 }

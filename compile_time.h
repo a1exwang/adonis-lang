@@ -122,6 +122,9 @@ namespace al {
       return this->typeTable[name];
     }
 
+  public:
+    static llvm::Value *getStructSize(llvm::IRBuilder<> &builder, llvm::Type *s);
+
 //  private:
   public:
     std::string nextConstVarName();
