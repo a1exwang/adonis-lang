@@ -16,12 +16,24 @@ adonis-lang is an programming language.
 - make -j8
 
 ## Design Goals
-- Static, Compiling, Type-Safe, Functional
+- Zero-cost abstraction
+- Static typed, type-safety
+- Compile and JIT
+- Functional
+  - Function object/lambda
+  - Pattern matching
+  - Inner iterator
+  - Immutable heap object?
+- Threading/memory model
+  - Rust-like, object ownership
+  - Erlang-like, actor pattern
+  - Clojure-like, pure functional, immutable
+  - Go-like, go function/channel/select, message queue model
+  - SQL-like, transaction model
 - Native support for fail-safe operations on NVRAM
   - Prevent the following errors
     1. inconsistent persistent memory
     1. leak persistent memory
-
 
 ## Persistent memory
 - By memory type
@@ -57,6 +69,10 @@ persistent {
   p0: int32;
   p1: User;
   p2: User;
+}
+
+extern {
+  fn plus(a: int32, b: int32) int32;
 }
 
 // Entrypoint

@@ -57,6 +57,12 @@ al::Parser::symbol_type al::Lexer::lex() {
           }
       },
       {
+          "\\,",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_COMMA(Parser::location_type());
+          }
+      },
+      {
           "\\)",
           [](const std::string &s) -> Parser::symbol_type {
             return Parser::make_RIGHTPAR(Parser::location_type());
@@ -135,7 +141,12 @@ al::Parser::symbol_type al::Lexer::lex() {
             return Parser::make_PERSISTENT(Parser::location_type());
           }
       },
-
+      {
+          "extern",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_EXTERN(Parser::location_type());
+          }
+      },
       // General Tokens
       {
           "\\d+",

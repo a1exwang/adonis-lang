@@ -67,7 +67,7 @@ void handler(int sig) {
 }
 
 int main() {
-  signal(SIGSEGV, handler);
+//  signal(SIGSEGV, handler);
 
   auto ct = compile();
   string s;

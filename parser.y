@@ -48,7 +48,7 @@
 %define parse.trace
 %define parse.error verbose
 
-%token FN STRUCT PERSISTENT
+%token FN STRUCT PERSISTENT EXTERN
 %token SEMICOLON ";";
 %token COLON COMMA BANG
 %token QUOTE "'";
@@ -88,6 +88,11 @@
 %type< std::shared_ptr<al::ast::Type> > type;
 
 %type< std::shared_ptr<al::ast::StructBlock> > struct_block;
+%type< std::shared_ptr<al::ast::ExternBlock> > extern_block;
+
+%type< std::shared_ptr<al::ast::VarDecls> > fn_args;
+%type< std::shared_ptr<al::ast::FnDecl> > fn_decl;
+%type< std::shared_ptr<al::ast::Decls> > decls;
 
 %start program
 
@@ -101,6 +106,7 @@ blocks: { $$ = std::make_shared<al::ast::Blocks>();  }
 block: persistent_block { $$ = $1; }
     | fn_block { $$ = $1; }
     | struct_block { $$ = $1; }
+    | extern_block { $$ = $1; }
 
 /* struct_block:
  *  struct User {
@@ -115,22 +121,33 @@ struct_block: STRUCT SYMBOL_LIT LEFTBRACE var_decls RIGHTBRACE {
 persistent_block: PERSISTENT LEFTBRACE var_decls RIGHTBRACE {
       $$ = std::make_shared<al::ast::PersistentBlock>($3);
     }
+extern_block: EXTERN LEFTBRACE decls RIGHTBRACE {
+      $$ = std::make_shared<al::ast::ExternBlock>($3);
+    }
 
-var_decls: { $$ = std::make_shared<al::ast::VarDecls>(); }
-    | var_decl SEMICOLON var_decls { $$ = $3; $$->prependChild($1); }
+decls: { $$ = std::make_shared<al::ast::Decls>(); }
+    | fn_decl SEMICOLON decls { $$ = $3; $$->prependChild($1); }
+    | var_decl SEMICOLON decls { $$ = $3; $$->prependChild($1); }
+
+var_decls: var_decl { $$ = std::make_shared<al::ast::VarDecls>(); $$->prependChild($1); }
+    | var_decl var_decls { $$ = $2; $$->prependChild($1); }
+    | var_decl COMMA var_decls { $$ = $3; $$->prependChild($1); }
 
 /* fn_block
  * fn add(a: int, b: int) int {
  *    a + b
  * }
  */
-fn_block: FN SYMBOL_LIT LEFTPAR RIGHTPAR stmt_block {
-        $$ = std::make_shared<al::ast::FnDef>($2, $5);
+fn_args: var_decls { $$ = $1; }
+fn_decl: FN SYMBOL_LIT LEFTPAR fn_args RIGHTPAR {
+      $$ = std::make_shared<al::ast::FnDecl>($2, std::make_shared<al::ast::Type>(), $4);
     }
-/*fn_args:
-    | fn_arg fn_args
-fn_arg: var_decl COMMA
-*/
+    | FN SYMBOL_LIT LEFTPAR RIGHTPAR { $$ = std::make_shared<al::ast::FnDecl>($2); }
+    | FN SYMBOL_LIT LEFTPAR fn_args RIGHTPAR type { $$ = std::make_shared<al::ast::FnDecl>($2, $6, $4); }
+    | FN SYMBOL_LIT LEFTPAR RIGHTPAR type { $$ = std::make_shared<al::ast::FnDecl>($2, $5); }
+fn_block: fn_decl stmt_block {
+        $$ = std::make_shared<al::ast::FnDef>($1, $2);
+    }
 
 stmt_block: LEFTBRACE stmts RIGHTBRACE {
         $$ = std::make_shared<al::ast::StmtBlock>($2);
@@ -151,10 +168,11 @@ exp: exp_call { $$ = $1; }
 */
 
 exp_call: SYMBOL_LIT LEFTPAR exps RIGHTPAR {
-    $$ = std::make_shared<al::ast::ExpCall>($1, $3->toVector());
-}
-//exp_ctor: SYMBOL_LIT LEFTBRACE exps RIGHTBRACE
-//exp_nvctor: SYMBOL_LIT BANG LEFTBRACE exps RIGHTBRACE
+      $$ = std::make_shared<al::ast::ExpCall>($1, $3->toVector());
+    }
+    | SYMBOL_LIT LEFTPAR RIGHTPAR {
+      $$ = std::make_shared<al::ast::ExpCall>($1, std::vector<std::shared_ptr<al::ast::Exp>>());
+    }
 exp_op: exp PLUS exp {
       $$ = std::make_shared<al::ast::ExpCall>("+", std::vector<std::shared_ptr<al::ast::Exp>>({$1, $3})); }
     | exp EQ exp { $$ = std::make_shared<al::ast::ExpCall>("=", std::vector<std::shared_ptr<al::ast::Exp>>{$1, $3}); }
@@ -163,16 +181,14 @@ exp_var_ref: SYMBOL_LIT { $$ = std::make_shared<al::ast::ExpVarRef>($1); }
 
 exp_member: SYMBOL_LIT DOT SYMBOL_LIT { $$ = std::make_shared<al::ast::ExpMemberAccess>($1, $3); }
 
-exps: { $$ = std::make_shared<al::ast::ExpList>(); }
-    | exp exps { $$ = $2; $$->prependChild($1); }
+exps: exp { $$ = std::make_shared<al::ast::ExpList>(); $$->prependChild($1); }
+    | exp COMMA exps { $$ = $3; $$->prependChild($1); }
 
 
 var_decl: SYMBOL_LIT COLON type {
     $$ = std::make_shared<al::ast::VarDecl>($1, $3);
 }
 type: SYMBOL_LIT { $$ = std::make_shared<al::ast::Type>($1); }
-//    | REF SYMBOL_LIT
-//    | NV REF SYMBOL_LIT
 
 %%
 void al::Parser::error(const location &loc , const std::string &message) {

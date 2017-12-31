@@ -140,14 +140,14 @@ void al::CompileTime::createPrimitiveTypes() {
 
 void al::CompileTime::init1() {
   setupMainModule();
-  createPrimitiveTypes();
+//  createPrimitiveTypes();
   registerBuiltinTypes();
-  createLibFunc();
-  createFnFunc();
-  createPutsFunc();
+//  createLibFunc();
+//  createFnFunc();
+//  createPutsFunc();
 
-  createPlaceHolderFunc("statements", 3);
-  createPlaceHolderFunc("take-last", 3);
+//  createPlaceHolderFunc("statements", 3);
+//  createPlaceHolderFunc("take-last", 3);
 //  createPlaceHolderFunc("puts", 1);
   createMainFunc();
 }
@@ -175,24 +175,6 @@ void al::CompileTime::createMainFunc() {
           false
       ),
       Function::LinkageTypes::ExternalLinkage, "howAreYou", getMainModule()
-  );
-
-  Function::Create(
-      FunctionType::get(
-          Type::getVoidTy(theContext),
-          {IntegerType::getInt32Ty(theContext)},
-          false
-      ),
-      Function::LinkageTypes::ExternalLinkage, "putsInt", getMainModule()
-  );
-
-  Function::Create(
-      FunctionType::get(
-          IntegerType::getInt32Ty(theContext),
-          {IntegerType::getInt32Ty(theContext), IntegerType::getInt32Ty(theContext)},
-          false
-      ),
-      Function::LinkageTypes::ExternalLinkage, "plus", getMainModule()
   );
 
   builder.CreateCall(this->howAreYou, {});
@@ -442,6 +424,11 @@ void al::CompileTime::registerBuiltinTypes() {
   objType.name = "int32";
   objType.llvmType = llvm::Type::getInt32Ty(theContext);
   this->registerType("int32", objType);
+
+  ObjType voidTy;
+  voidTy.name = "void";
+  voidTy.llvmType = llvm::Type::getVoidTy(theContext);
+  this->registerType("void", voidTy);
 }
 
 llvm::Value *al::CompileTime::createGetMemNvmVar(const std::string &name) {

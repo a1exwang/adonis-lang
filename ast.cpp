@@ -36,122 +36,6 @@ namespace al {
       this->decIndent();
     }
 
-//    VisitResult ExpList::visit(CompileTime &rt) {
-//      preVisit(rt);
-//      auto c = getChildren();
-//      if (c.empty()) {
-//        // TODO: should return llvm nullptr
-//        return nullptr;
-//      }
-//      auto symbol = dynamic_cast<Symbol*>(c[0].get());
-//      if (symbol == nullptr) {
-//        // not function call list, maybe value array, string array
-//        vector<llvm::Value*> items;
-//        for (const auto &item : c) {
-//          auto str = dynamic_cast<StringLiteral*>(item.get());
-//          if (str != nullptr) {
-//            items.push_back(rt.castStringToValuePtr(
-//                rt.castStringToValuePtr(rt.createStringValuePtr(str->getValue(), rt.getBuilder()))));
-//          }
-//        }
-//        VisitResult vr;
-//        vr.value = llvm::ConstantPointerNull::get(rt.getValuePtrType());
-////        vr.value = llvm::Array::get(arr, items);
-//        return vr;
-////        return llvm::ConstantArray::get(arr, {});
-////        cerr << "Compile error, the first element in function call list must be a symbol" << endl;
-////        abort();
-//      }
-//      bool isNative = false;
-//      auto fnName = symbol->getValue();
-//      llvm::Function *callee = nullptr;
-//
-//      if (fnName == "wtf") {
-//        vector<llvm::Type*> types(3, llvm::Type::getInt64Ty(rt.getContext()));
-//        auto ft = llvm::FunctionType::get(
-//            llvm::Type::getVoidTy(rt.getContext()),
-//            types,
-//            true
-//        );
-//        callee = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "AL__callFunction", rt.getMainModule());
-//
-//        auto strValuePtr = rt.createStringValuePtr(fnName, rt.getBuilder());
-//        auto nameStrValue = rt.castStringToValuePtr(strValuePtr);
-//
-//        std::vector<llvm::Value *> ArgsV;
-//        // void AL__callFunction(uint64_t _prt, uint64_t _pname, uint64_t nargs, ...);
-//        ArgsV.push_back(llvm::ConstantInt::get(llvm::Type::getInt64Ty(rt.getContext()), (uint64_t)&rt));
-//        ArgsV.push_back(rt.getBuilder().CreatePtrToInt(nameStrValue, llvm::Type::getInt64Ty(rt.getContext())));
-//        ArgsV.push_back(llvm::ConstantInt::get(llvm::Type::getInt64Ty(rt.getContext()), (uint64_t)(c.size() - 1)));
-//
-//        for (unsigned i = 1; i < c.size(); ++i) {
-//          auto result = c[i]->visit(rt);
-//          if (result.value) {
-//            ArgsV.push_back(rt.getBuilder().CreatePointerCast(result.value, rt.getValuePtrType()));
-//          }
-//          else {
-//            ArgsV.push_back(rt.getBuilder().CreatePointerCast(
-//                rt.castStringToValuePtr(rt.createStringValuePtr("wtf", rt.getBuilder())), rt.getValuePtrType())
-//            );
-//          }
-//        }
-//
-//        postVisit(rt);
-//
-//        VisitResult vr;
-//        for (int i = 1; i < ArgsV.size(); ++i)
-//          ArgsV[i] = rt.getBuilder().CreatePtrToInt(ArgsV[i], llvm::Type::getInt64Ty(rt.getContext()));
-//
-//        vr.value = rt.getBuilder().CreateCall(callee, ArgsV);
-//        return vr;
-//      }
-//      else {
-//        callee = rt.getMainModule()->getFunction(fnName);
-//        if (callee == nullptr) {
-//          auto nativeFnName = "AL__" + fnName;
-//          uint32_t argc = c.size() - 1;
-//          vector<llvm::Type*> ps;
-//          ps.push_back(llvm::Type::getInt64Ty(rt.getContext()));
-//          for (int i = 0; i < argc; ++i) {
-//            ps.push_back(llvm::Type::getInt64Ty(rt.getContext()));
-//          }
-//          auto ft = llvm::FunctionType::get(llvm::Type::getVoidTy(rt.getContext()), ps, false);
-//          callee = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, nativeFnName, rt.getMainModule());
-////        callee = rt.getMainModule()->getFunction();
-//          isNative = true;
-//        }
-//      }
-//      if (!callee) {
-//        cerr << "Compile error, function '" << fnName << "' not defined" << endl;
-//        abort();
-//      }
-//
-//
-//      std::vector<llvm::Value *> ArgsV;
-//      for (unsigned i = 1; i < c.size(); ++i) {
-//        auto result = c[i]->visit(rt);
-//        if (result.value) {
-//          ArgsV.push_back(rt.getBuilder().CreatePointerCast(result.value, rt.getValuePtrType()));
-//        }
-//        else {
-//          ArgsV.push_back(rt.getBuilder().CreatePointerCast(
-//              rt.createStringValuePtr("wtf", rt.getBuilder()),
-//              rt.getValuePtrType()));
-//        }
-//      }
-//
-//      postVisit(rt);
-//      VisitResult vr;
-//      if (isNative) {
-//        ArgsV.insert(ArgsV.begin(), llvm::ConstantInt::get(llvm::Type::getInt64Ty(rt.getContext()), (uint64_t)&rt));
-//        for (int i = 1; i < ArgsV.size(); ++i)
-//          ArgsV[i] = rt.getBuilder().CreatePtrToInt(ArgsV[i], llvm::Type::getInt64Ty(rt.getContext()));
-//      }
-//
-//
-//      vr.value = rt.getBuilder().CreateCall(callee, ArgsV);
-//      return vr;
-//    }
 
     void Symbol::preVisit(CompileTime &) {
 //      std::cout << std::string((uint32_t)this->indent, '\t')
@@ -163,6 +47,8 @@ namespace al {
     }
 
     std::string Type::getName() const { return symbol->getName(); }
+
+    bool Type::isVoid() { return symbol->getName() == "void"; }
 
     ExpCall::ExpCall(const std::shared_ptr<Symbol> &name, std::vector<std::shared_ptr<Exp>> exps)
         :ExpCall(name->getName(), exps) {}
@@ -291,11 +177,11 @@ namespace al {
 
 
     std::string FnDef::getName() const {
-      return symbol->getName();
+      return decl->getName();
     }
 
     std::string FnDef::getLinkageName() const {
-      return "AL__" + symbol->getName();
+      return decl->getName();
     }
 
     void FnDef::postVisit(CompileTime &ct) {
@@ -420,6 +306,63 @@ namespace al {
 
       objType.llvmType = llvm::StructType::create(ct.getContext(), elements, objType.name);
       ct.registerType(objType.name, objType);
+    }
+
+    FnDecl::FnDecl(sp<Symbol> name, sp<Type> ret, sp<VarDecls> args) :name(move(name)), ret(ret), args(move(args)) { }
+
+    std::string FnDecl::getName() const { return name->getName(); }
+
+    std::vector<llvm::Type *> FnDecl::getArgTypes(CompileTime &ct) const {
+      std::vector<llvm::Type*> ts;
+      for (auto arg : args->getChildren()) {
+        auto tName = dynamic_cast<VarDecl*>(arg.get())->getType()->getName();
+        ts.push_back(ct.getType(tName).llvmType);
+      }
+      return ts;
+    }
+
+    std::vector<string> FnDecl::getArgNames(CompileTime &ct) const {
+      std::vector<string> ts;
+      for (auto arg : args->getChildren()) {
+        auto name = dynamic_cast<VarDecl*>(arg.get())->getName();
+        ts.push_back(name);
+      }
+      return ts;
+    }
+
+    Type FnDecl::getRetType() const { return *ret; }
+
+    void ExternBlock::postVisit(CompileTime &ct) {
+      for (const auto &child : getChildren()[0]->getChildren()) {
+        auto fnDecl = dynamic_pointer_cast<FnDecl>(child);
+        if (fnDecl != nullptr) {
+          auto fn = ct.getMainModule()->getFunction(fnDecl->getName());
+          if (fn != nullptr) {
+            cerr << "function already exists" << endl;
+            abort();
+          }
+          auto retType = ct.getType(fnDecl->getRetType().getName());
+          vector<llvm::Type*> args;
+          for (auto arg : fnDecl->getArgTypes(ct)) {
+            args.push_back(arg);
+          }
+          fn = Function::Create(
+              FunctionType::get(retType.llvmType, args, false),
+              Function::ExternalLinkage,
+              fnDecl->getName(),
+              ct.getMainModule()
+          );
+          auto argNames = fnDecl->getArgNames(ct);
+          int i = 0;
+          for (auto &a : fn->args()) {
+            a.setName(argNames[i++]);
+          }
+        }
+        else {
+          cerr << "extern only supports function type" << endl;
+          abort();
+        }
+      }
     }
   }
 }

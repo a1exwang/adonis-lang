@@ -69,13 +69,31 @@ namespace al {
 
     class Symbol;
     class Type;
-    class VarDecl :public ASTNode{
+    class Decl :public ASTNode {
+    };
+    class Decls :public ASTNode { };
+    class VarDecl :public Decl{
     public:
       VarDecl(const std::shared_ptr<Symbol> &symbol, const std::shared_ptr<Type> &type);
       std::string getName();
       sp<Type> getType();
     };
     class VarDecls :public ASTNode {
+    };
+    class FnDecl :public Decl {
+    public:
+      explicit FnDecl(
+          sp<Symbol> name,
+          sp<Type> ret = std::make_shared<Type>(),
+          sp<VarDecls> args = std::make_shared<VarDecls>());
+      std::string getName() const;
+      Type getRetType() const;
+      std::vector<llvm::Type*> getArgTypes(CompileTime &ct) const;
+      std::vector<std::string> getArgNames(CompileTime &ct) const;
+    private:
+      sp<Symbol> name;
+      sp<Type> ret;
+      sp<VarDecls> args;
     };
     class PersistentBlock :public Block {
     public:
@@ -95,10 +113,16 @@ namespace al {
       sp<Symbol> name;
       sp<VarDecls> varDecls;
     };
+    class ExternBlock :public Block {
+    public:
+      ExternBlock(sp<Decls> decls) { appendChild(decls); }
+      void postVisit(CompileTime &ct) override;
+    };
     class Type :public ASTNode {
     public:
-      Type(std::shared_ptr<Symbol> symbol);
+      Type(std::shared_ptr<Symbol> symbol = std::make_shared<Symbol>("void"));
       std::string getName() const;
+      bool isVoid();
     private:
       sp<Symbol> symbol;
     };
@@ -117,8 +141,7 @@ namespace al {
 
     class FnDef :public Block {
     public:
-      FnDef(std::shared_ptr<Symbol> symbol, sp<StmtBlock> stmtBlock)
-        :symbol(std::move(symbol)) {
+      FnDef(sp<FnDecl> decl, sp<StmtBlock> stmtBlock) :decl(std::move(decl)) {
         appendChild(stmtBlock);
       }
 
@@ -127,7 +150,7 @@ namespace al {
       std::string getName() const;
       std::string getLinkageName() const;
     private:
-      sp<Symbol> symbol;
+      sp<FnDecl> decl;
     };
 
     class Exp :public Stmt {
@@ -197,11 +220,8 @@ namespace al {
     private:
       std::string s;
     };
-
-
     class Literal :public Exp {
     };
-
     class StringLiteral :public Literal {
     public:
       explicit StringLiteral(std::string s): s(std::move(s)) { }

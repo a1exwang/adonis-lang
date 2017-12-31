@@ -30,6 +30,10 @@ DLLEXPORT void nvmSetup() {
   nvm_initialize("nvm", 1);
 }
 
+DLLEXPORT int32_t plus(int32_t a, int32_t b) {
+  return a + b;
+}
+
 DLLEXPORT void putsInt(int32_t i) {
   cout << i << endl;
 }
