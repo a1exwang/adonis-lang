@@ -1,11 +1,9 @@
-
 persistent {
-  pCounter: int;
+  p_0: int;
 }
 
 
 fn main() {
-  puts(pCounter);
-  pCounter = pCounter + 1;
+  p_0 = p_0 + 1;
+  putsInt(p_0);
 }
-

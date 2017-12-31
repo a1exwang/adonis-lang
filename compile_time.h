@@ -34,6 +34,17 @@ namespace al {
   namespace ast {
     class ASTNode;
   }
+
+  struct CompilerContext {
+  public:
+    CompilerContext(llvm::LLVMContext &c, llvm::Function *function, llvm::BasicBlock *bb)
+        :basicBlock(bb), function(function), builder(new llvm::IRBuilder<>(c)) { builder->SetInsertPoint(bb); }
+    CompilerContext(const CompilerContext &cc)
+        :basicBlock(cc.basicBlock), builder(cc.builder), function(cc.function) {}
+    llvm::BasicBlock *basicBlock;
+    llvm::Function *function;
+    std::shared_ptr<llvm::IRBuilder<>> builder;
+  };
   class CompileTime {
   public:
     CompileTime();
@@ -67,6 +78,13 @@ namespace al {
     llvm::StructType *getArrayType() const { return arrayType; }
     std::unique_ptr<llvm::Module> &&moveMainModule() { return std::move(mainModule); }
 
+    llvm::Function *getHowAreYouFn() const { return this->howAreYou; }
+
+    void pushContext(CompilerContext cc) {
+      this->compilerContextStack.push_back(std::move(cc));
+    }
+    CompilerContext getCompilerContext() const { return *(compilerContextStack.end()-1); }
+    void popContext() { compilerContextStack.pop_back(); }
     void pushCurrentBlock(llvm::BasicBlock *b) { this->currentBlocks.push_back(b); }
     void popCurrentBlock() { this->currentBlocks.pop_back(); }
     llvm::BasicBlock *getCurrentBlock() const { return *(this->currentBlocks.end() - 1); }
@@ -76,6 +94,13 @@ namespace al {
 
     llvm::LLVMContext &getContext() { return theContext; }
 
+    llvm::Value *createGetPersistentVar(const std::string &name);
+    bool hasPersistentVar(const std::string &name) const {
+      return this->persistentSymbolTable.find(name) != persistentSymbolTable.end();
+    }
+    void createSetPersistentVar(const std::string &name, llvm::Value*);
+    void registerSetPersistentVar(const std::string &name);
+
 //  private:
   public:
     std::string nextConstVarName();
@@ -84,6 +109,7 @@ namespace al {
       llvm::Function *printf;
     } fns;
     llvm::Function *mainFunction;
+    llvm::Function *howAreYou;
 
     llvm::StructType *valueType;
     llvm::PointerType *valuePtrType;
@@ -100,5 +126,7 @@ namespace al {
     int strCounter;
 
     std::map<std::string, llvm::Module*> symbolTable;
+    std::vector<CompilerContext> compilerContextStack;
+    std::map<std::string, int> persistentSymbolTable;
   };
 }

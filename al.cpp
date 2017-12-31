@@ -45,6 +45,7 @@
 #include <memory>
 #include <vector>
 #include <cstdarg>
+#include <nvm_malloc.h>
 
 using namespace llvm;
 using namespace std;
@@ -56,43 +57,81 @@ using namespace std;
 #endif
 
 extern "C" {
-DLLEXPORT void callMeDaddy() {
-  cout << "daddy" << endl;
+DLLEXPORT void howAreYou() {
+  cout << "howareyou" << endl;
 }
 
-ExecutionEngine *EE;
-llvm::Module *mainModule;
+DLLEXPORT void nvmSetup() {
+  nvm_initialize("nvm", 1);
+}
 
-DLLEXPORT void AL__callFunction(uint64_t _prt, uint64_t _pname, uint64_t nargs, ...) {
-  auto rt = reinterpret_cast<al::CompileTime*>(_prt);
-  auto name = reinterpret_cast<al::Value *>(_pname);
-  vector<uint64_t> params;
-  va_list args;
-  va_start(args, nargs);
-  for (int i = 0; i < nargs; ++i) {
-    auto arg = va_arg(args, uint64_t);
-    params.push_back(arg);
+DLLEXPORT void putsInt(int32_t i) {
+  cout << i << endl;
+}
+
+DLLEXPORT int getIntNvmVar(int intId) {
+  string name;
+  stringstream ss;
+  ss << intId;
+  ss >> name;
+  int *p = (int*) nvm_get_id(name.c_str());
+  if (p == nullptr) {
+    p = (int *) nvm_reserve_id(name.c_str(), 4);
+    *p = 0;
+    nvm_persist(p, 4);
+    nvm_activate_id(name.c_str());
   }
-  va_end(args);
-
-  string fnName((const char*)name->sVal.data, name->sVal.len);
-  fnName = "AL__" + fnName;
-
-  decltype(rt->symbolTable.find(fnName)) wtf;
-  if ((wtf = rt->symbolTable.find(fnName)) == rt->symbolTable.end()) {
-    cerr << "Cannot find function '" << fnName << "'" << endl;
-    assert(false);
+  return *p;
+}
+DLLEXPORT void setIntNvmVar(int intId, int value) {
+  string name;
+  stringstream ss;
+  ss << intId;
+  ss >> name;
+  int *p = (int*) nvm_get_id(name.c_str());
+  if (p == nullptr) {
+    p = (int *) nvm_reserve_id(name.c_str(), 4);
   }
-  auto mod = wtf->second;
-  auto func = mod->getFunction(fnName);
-//  func->dump();
 
-  EE->addModule(move(unique_ptr<llvm::Module>(mod)));
-  vector<GenericValue> gvs;
-  for (auto p : params) {
-    gvs.emplace_back((llvm::Value*)p);
-  }
-  EE->runFunction(func, gvs);
+  *p = value;
+  nvm_persist(p, 4);
+  nvm_activate_id(name.c_str());
+}
+
+//DLLEXPORT void AL__callFunction(uint64_t _prt, uint64_t _pname, uint64_t nargs, ...) {
+//  auto rt = reinterpret_cast<al::CompileTime*>(_prt);
+//  auto name = reinterpret_cast<al::Value *>(_pname);
+//  vector<uint64_t> params;
+//  va_list args;
+//  va_start(args, nargs);
+//  for (int i = 0; i < nargs; ++i) {
+//    auto arg = va_arg(args, uint64_t);
+//    params.push_back(arg);
+//  }
+//  va_end(args);
+//
+//  string fnName((const char*)name->sVal.data, name->sVal.len);
+//  fnName = "AL__" + fnName;
+//
+//  decltype(rt->symbolTable.find(fnName)) wtf;
+//  if ((wtf = rt->symbolTable.find(fnName)) == rt->symbolTable.end()) {
+//    cerr << "Cannot find function '" << fnName << "'" << endl;
+//    assert(false);
+//  }
+//  auto mod = wtf->second;
+//  auto func = mod->getFunction(fnName);
+////  func->dump();
+//
+//  EE->addModule(move(unique_ptr<llvm::Module>(mod)));
+//  vector<GenericValue> gvs;
+//  for (auto p : params) {
+//    gvs.emplace_back((llvm::Value*)p);
+//  }
+//  EE->runFunction(func, gvs);
+//}
+
+DLLEXPORT int32_t AL__plus(int32_t a, int32_t b) {
+  return a + b;
 }
 
 DLLEXPORT void AL__insertFunction(uint64_t _rt, uint64_t _name) {
@@ -131,12 +170,16 @@ DLLEXPORT void AL__insertFunction(uint64_t _rt, uint64_t _name) {
   builder1.CreateRet(ConstantPointerNull::get(rt->getValuePtrType()));
 
   verifyFunction(*func);
-
 }
 }
 
 
 int main() {
+  LLVMLinkInMCJIT();
+  InitializeNativeTarget();
+  InitializeNativeTargetAsmPrinter();
+  ExecutionEngine *EE;
+  llvm::Module *mainModule;
   al::CompileTime rt;
 
   ifstream ifs("/home/alexwang/dev/proj/cpp/adonis-lang/nvm.al");
@@ -160,19 +203,15 @@ int main() {
   raw_string_ostream s1(s);
 //  rt.getMainModule()->print(errs(), nullptr);
   rt.getMainModule()->print(s1, nullptr);
-  mainModule = rt.getMainModule();
   ofstream fs("test.ll");
   fs << s;
 
   /**
    * Start LLVM JIT Compiler Interpreter
    */
-  LLVMLinkInMCJIT();
-  InitializeNativeTarget();
-  InitializeNativeTargetAsmPrinter();
   auto mainFunc = rt.getMainFunc();
-  auto mainModule = rt.moveMainModule();
-  EngineBuilder eb(move(mainModule));
+  auto mainModule1 = rt.moveMainModule();
+  EngineBuilder eb(move(mainModule1));
   EE = eb
       .setEngineKind(EngineKind::JIT)
       .create();

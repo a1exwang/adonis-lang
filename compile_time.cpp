@@ -20,6 +20,7 @@
 #include <fstream>
 #include <sstream>
 #include "compile_time.h"
+#include <nvm_malloc.h>
 
 using namespace llvm;
 using namespace std;
@@ -166,18 +167,53 @@ void al::CompileTime::createMainFunc() {
   /* declares stdlib functions */
   /* main function starts */
 //  auto ft = FunctionType::get(Type::getVoidTy(theContext), {});
-//  auto func1 = Function::Create(ft, Function::LinkageTypes::ExternalLinkage, "callMeDaddy", getMainModule());
-  auto a = Function::Create(
+  this->howAreYou = Function::Create(
       FunctionType::get(
           Type::getVoidTy(theContext),
           {},
           false
       ),
-      Function::LinkageTypes::ExternalLinkage, "callMeDaddy", getMainModule()
+      Function::LinkageTypes::ExternalLinkage, "howAreYou", getMainModule()
   );
 
+  Function::Create(
+      FunctionType::get(
+          Type::getVoidTy(theContext),
+          {IntegerType::getInt32Ty(theContext)},
+          false
+      ),
+      Function::LinkageTypes::ExternalLinkage, "putsInt", getMainModule()
+  );
 
-  builder.CreateCall(a, {});
+  Function::Create(
+      FunctionType::get(
+          IntegerType::getInt32Ty(theContext),
+          {IntegerType::getInt32Ty(theContext), IntegerType::getInt32Ty(theContext)},
+          false
+      ),
+      Function::LinkageTypes::ExternalLinkage, "plus", getMainModule()
+  );
+
+  builder.CreateCall(this->howAreYou, {});
+
+  builder.CreateCall(Function::Create(
+      FunctionType::get(
+          IntegerType::getVoidTy(theContext),
+          {},
+          false
+      ),
+      Function::LinkageTypes::ExternalLinkage, "nvmSetup", getMainModule()
+  ), {});
+
+  auto userFn = Function::Create(
+      FunctionType::get(
+          Type::getVoidTy(theContext),
+          {},
+          false
+      ),
+      Function::LinkageTypes::ExternalLinkage, "AL__main", getMainModule()
+  );
+  builder.CreateCall(userFn, {});
 }
 
 llvm::Value *al::CompileTime::createStringValuePtr(const std::string &s, IRBuilder<> &builder) {
@@ -344,6 +380,44 @@ llvm::Value *al::CompileTime::createNullValuePtr() {
       )
   );
   return valObj;
+}
+
+llvm::Value *al::CompileTime::createGetPersistentVar(const std::string &name) {
+  if (this->persistentSymbolTable.find(name) == this->persistentSymbolTable.end()) {
+    cerr << "Persistent var not found " << name << endl;
+    abort();
+  }
+
+  int varId = name[name.size() - 1] - '0';
+
+  auto fn = getMainModule()->getOrInsertFunction(
+      "getIntNvmVar",
+      FunctionType::get(
+          Type::getInt32Ty(theContext), {Type::getInt32Ty(theContext)}, false
+      )
+  );
+  return getCompilerContext().builder->CreateCall(fn, {ConstantInt::get(Type::getInt32Ty(theContext), (uint64_t)varId)});
+}
+
+void al::CompileTime::createSetPersistentVar(const std::string &name, llvm::Value *value) {
+  if (this->persistentSymbolTable.find(name) == this->persistentSymbolTable.end()) {
+    cerr << "Persistent var not found '" << name << "'" << endl;
+    abort();
+  }
+
+  int varId = name[name.size() - 1] - '0';
+
+  auto fn = getMainModule()->getOrInsertFunction(
+      "setIntNvmVar",
+      FunctionType::get(
+          Type::getVoidTy(theContext), {Type::getInt32Ty(theContext), Type::getInt32Ty(theContext)}, false
+      )
+  );
+  getCompilerContext().builder->CreateCall(fn, {ConstantInt::get(Type::getInt32Ty(theContext), (uint64_t)varId), value});
+}
+
+void al::CompileTime::registerSetPersistentVar(const std::string &name) {
+  this->persistentSymbolTable[name] = 0;
 }
 
 //llvm::Value *al::CompileTime::castToValuePtr(llvm::Value *val) {

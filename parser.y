@@ -48,20 +48,20 @@
 %define parse.trace
 %define parse.error verbose
 
-%token <std::shared_ptr<al::ast::StringLiteral>> STRING_LIT
-%token <std::shared_ptr<al::ast::Symbol>> SYMBOL_LIT
-%token <std::shared_ptr<al::ast::IntLiteral>> INT_LIT
-%token QUOTE "'";
-%token LEFTPAR "(";
-%token RIGHTPAR ")";
-%left PLUS
-%right EQ
-%token RIGHT_ARROW "->";
 %token LEFTBRACE RIGHTBRACE
 %token COLON COMMA BANG DOT
 %token FN REF NV STRUCT LET
 %token PERSISTENT
+%token RIGHT_ARROW "->";
 %token SEMICOLON ";";
+%token QUOTE "'";
+%right EQ
+%left PLUS
+%token LEFTPAR "(";
+%token RIGHTPAR ")";
+%token <std::shared_ptr<al::ast::StringLiteral>> STRING_LIT
+%token <std::shared_ptr<al::ast::Symbol>> SYMBOL_LIT
+%token <std::shared_ptr<al::ast::IntLiteral>> INT_LIT
 
 %token END 0 "end of file"
 
@@ -98,7 +98,7 @@
 program : blocks { rt.setASTRoot($1); }
 
 blocks: { $$ = std::make_shared<al::ast::Blocks>();  }
-    | block blocks { $$ = $2->append($1); }
+    | block blocks { $$ = $2; $$->prependChild($1); }
 
 block: persistent_block { $$ = $1; }
     | fn_block { $$ = $1; }
@@ -118,11 +118,10 @@ struct_element: var_decl COMMA
 
 persistent_block: PERSISTENT LEFTBRACE var_decls RIGHTBRACE {
       $$ = std::make_shared<al::ast::PersistentBlock>($3);
-       std::cout << "123" << std::endl;
     }
 
 var_decls: { $$ = std::make_shared<al::ast::VarDecls>(); }
-    | var_decl SEMICOLON var_decls { $$ = $3->append($1); }
+    | var_decl SEMICOLON var_decls { $$ = $3; $$->prependChild($1); }
 
 /* fn_block
  * fn add(a: int, b: int) int {
@@ -141,7 +140,7 @@ stmt_block: LEFTBRACE stmts RIGHTBRACE {
         $$ = std::make_shared<al::ast::StmtBlock>($2);
     }
 stmts: { $$ = std::make_shared<al::ast::Stmts>(); }
-    | stmt stmts { $$ = $2->append($1); }
+    | stmt stmts { $$ = $2; $$->prependChild($1); }
 stmt: exp SEMICOLON { $$ = $1; }
 //    | LET SYMBOL_LIT EQ exp SEMICOLON
 
@@ -166,7 +165,7 @@ exp_op: exp PLUS exp {
 exp_var_ref: SYMBOL_LIT { $$ = std::make_shared<al::ast::ExpVarRef>($1); }
 
 exps: { $$ = std::make_shared<al::ast::ExpList>(); }
-    | exp exps { $$ = $2->append($1); }
+    | exp exps { $$ = $2; $$->prependChild($1); }
 
 
 var_decl: SYMBOL_LIT COLON type {

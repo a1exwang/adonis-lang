@@ -1,0 +1,3 @@
+[submodule "nvm_malloc"]
+	path = nvm_malloc
+	url = https://github.com/hyrise/nvm_malloc.git
