@@ -19,6 +19,7 @@ namespace al {
       VisitResult() :value() { }
       VisitResult(const std::nullptr_t &nptr) :value(nullptr) {}
       llvm::Value *value;
+      llvm::Value *gepResult;
     };
 
     // Visitor design pattern
@@ -46,6 +47,7 @@ namespace al {
       void prependChild(const std::shared_ptr<ASTNode> &node) {
         this->children.insert(this->children.begin(), node);
       }
+      VisitResult getVR() const { return vr; }
     protected:
       VisitResult vr;
 
@@ -81,6 +83,17 @@ namespace al {
         appendChild(varDecls);
       }
       VisitResult visit(CompileTime &ct) override;
+    };
+    class StructBlock :public Block {
+    public:
+      StructBlock(sp<Symbol> name, const sp<VarDecls> &varDecls)
+          :name(std::move(name)), varDecls(varDecls) {
+        appendChild(varDecls);
+      }
+      void postVisit(CompileTime &ct) override;
+    private:
+      sp<Symbol> name;
+      sp<VarDecls> varDecls;
     };
     class Type :public ASTNode {
     public:
@@ -140,6 +153,16 @@ namespace al {
       std::string getName() const;
     private:
       sp<Symbol> name;
+    };
+
+    class ExpMemberAccess :public Exp {
+    public:
+      ExpMemberAccess(sp<Symbol> obj, sp<Symbol> member) :obj(std::move(obj)), member(std::move(member)) {}
+      VisitResult visit(CompileTime &ct) override;
+      std::string getObjName();
+    private:
+      sp<Symbol> obj;
+      sp<Symbol> member;
     };
 
     class ExpList :public ASTNode {

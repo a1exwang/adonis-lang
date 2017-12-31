@@ -109,6 +109,12 @@ al::Parser::symbol_type al::Lexer::lex() {
             return Parser::make_DOT(Parser::location_type());
           }
       },
+      {
+          "\\.",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_DOT(Parser::location_type());
+          }
+      },
 
       // Keywords
       {
@@ -127,18 +133,6 @@ al::Parser::symbol_type al::Lexer::lex() {
           "persistent",
           [](const std::string &s) -> Parser::symbol_type {
             return Parser::make_PERSISTENT(Parser::location_type());
-          }
-      },
-      {
-          "nv",
-          [](const std::string &s) -> Parser::symbol_type {
-            return Parser::make_NV(Parser::location_type());
-          }
-      },
-      {
-          "ref",
-          [](const std::string &s) -> Parser::symbol_type {
-            return Parser::make_REF(Parser::location_type());
           }
       },
 

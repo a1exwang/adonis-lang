@@ -35,6 +35,13 @@ namespace al {
     class ASTNode;
   }
 
+  struct ObjType {
+    std::string name;
+//    bool persistent;
+    llvm::Type *llvmType;
+    std::vector<std::string> elementNames;
+  };
+
   struct CompilerContext {
   public:
     CompilerContext(llvm::LLVMContext &c, llvm::Function *function, llvm::BasicBlock *bb)
@@ -64,6 +71,7 @@ namespace al {
     void createPlaceHolderFunc(const std::string &name, int n);
     void createPutsFunc();
     void traverse1();
+    void registerBuiltinTypes();
     llvm::BasicBlock* createFunctionBody(llvm::Module &module, const std::string &name);
     llvm::Module* getMainModule() const;
 
@@ -94,12 +102,25 @@ namespace al {
 
     llvm::LLVMContext &getContext() { return theContext; }
 
-    llvm::Value *createGetPersistentVar(const std::string &name);
+    llvm::Value *createGetIntNvmVar(const std::string &name);
+    llvm::Value *createGetMemNvmVar(const std::string &name);
+    void createSetMemNvmVar(const std::string &name, llvm::Value *ptr);
     bool hasPersistentVar(const std::string &name) const {
       return this->persistentSymbolTable.find(name) != persistentSymbolTable.end();
     }
     void createSetPersistentVar(const std::string &name, llvm::Value*);
-    void registerSetPersistentVar(const std::string &name);
+    void registerPersistentVar(const std::string &name, const std::string &type);
+    std::string getPersistentVarType(const std::string &name) { return this->persistentSymbolTable[name]; }
+
+    void registerType(const std::string &name, ObjType type) {
+      this->typeTable[name] = type;
+    }
+    bool hasType(const std::string &name) const {
+      return this->typeTable.find(name) != this->typeTable.end();
+    }
+    ObjType getType(const std::string &name) {
+      return this->typeTable[name];
+    }
 
 //  private:
   public:
@@ -127,6 +148,7 @@ namespace al {
 
     std::map<std::string, llvm::Module*> symbolTable;
     std::vector<CompilerContext> compilerContextStack;
-    std::map<std::string, int> persistentSymbolTable;
+    std::map<std::string, std::string> persistentSymbolTable;
+    std::map<std::string, ObjType> typeTable;
   };
 }

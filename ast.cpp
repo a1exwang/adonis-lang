@@ -154,9 +154,9 @@ namespace al {
 //    }
 
     void Symbol::preVisit(CompileTime &) {
-      std::cout << std::string((uint32_t)this->indent, '\t')
-                << "sym<'" << this->s << "'>"
-                << std::endl;
+//      std::cout << std::string((uint32_t)this->indent, '\t')
+//                << "sym<'" << this->s << "'>"
+//                << std::endl;
     }
 
     Type::Type(std::shared_ptr<Symbol> symbol) :symbol(symbol) {
@@ -175,15 +175,31 @@ namespace al {
         auto vr = exp->visit(ct);
         args.push_back(vr.value);
       }
+      auto rhs = dynamic_pointer_cast<Exp>(exps[1]);
 
       Function *fn = nullptr;
       if (this->name == "=") {
         if (args.size() != 2) { cerr << "'=' only accepts 2 args" << endl; abort(); }
-        auto _varName = dynamic_pointer_cast<ExpVarRef>(exps[0]);
-        if (_varName == nullptr) {
-          cerr << "'=' operator accepts a symbol as the first arg" << endl;
+        auto ptr = dynamic_pointer_cast<ExpVarRef>(exps[0]);
+        if (ptr == nullptr) {
+          auto expMemberAcc = dynamic_pointer_cast<ExpMemberAccess>(exps[0]);
+          if (expMemberAcc == nullptr) {
+            cerr << "'=' operator accepts a symbol as the first arg" << endl;
+            abort();
+          }
+          // TODO
+          ct.getCompilerContext().builder->CreateStore(
+              rhs->getVR().value,
+              expMemberAcc->getVR().gepResult
+          );
+          vr.value = rhs->getVR().value;
+
+          // commit
+          ct.createSetMemNvmVar(expMemberAcc->getObjName(), expMemberAcc->getVR().gepResult);
+          return vr;
+
         } else {
-          auto varName = _varName->getName();
+          auto varName = ptr->getName();
 
           if (ct.hasPersistentVar(varName)) {
             ct.createSetPersistentVar(varName, args[1]);
@@ -250,7 +266,7 @@ namespace al {
 
     VisitResult ExpVarRef::visit(CompileTime &ct) {
       if (ct.hasPersistentVar(this->name->getName())) {
-        vr.value = ct.createGetPersistentVar(this->name->getName());
+        vr.value = ct.createGetIntNvmVar(this->name->getName());
       }
       else {
         vr.value = ct.getMainModule()->getGlobalVariable(this->name->getName());
@@ -276,7 +292,7 @@ namespace al {
     VisitResult PersistentBlock::visit(CompileTime &ct) {
       for (const auto &_varDecl : getChildren()[0]->getChildren()) {
         auto varDecl = std::dynamic_pointer_cast<VarDecl>(_varDecl);
-        ct.registerSetPersistentVar(varDecl->getName());
+        ct.registerPersistentVar(varDecl->getName(), varDecl->getType()->getName());
       }
       return vr;
     }
@@ -290,8 +306,70 @@ namespace al {
 
     sp<Type> VarDecl::getType() { return std::dynamic_pointer_cast<Type>(getChildren()[0]); }
 
-//    VisitResult Stmt::visit(CompileTime &ct) {
-//    }
+    VisitResult ExpMemberAccess::visit(CompileTime &ct) {
+      auto &builder = *ct.getCompilerContext().builder;
+      if (ct.hasPersistentVar(obj->getName())) {
+        auto nvmPtr = ct.createGetMemNvmVar(obj->getName());
+
+        auto structObjType = ct.getType(ct.getPersistentVarType(obj->getName()));
+        uint64_t idx = structObjType.elementNames.size();
+        for (uint64_t i = 0; i < structObjType.elementNames.size(); ++i) {
+          if (structObjType.elementNames[i] == member->getName()) {
+            idx = i;
+            break;
+          }
+        }
+        if (idx >= structObjType.elementNames.size()) {
+          cerr << "object member does not exist '" << member->getName() << "'" << endl;
+          abort();
+        }
+        auto structType = structObjType.llvmType;
+        auto structPtr = builder.CreatePointerCast(
+            nvmPtr, llvm::PointerType::get(structType, 0)
+        );
+        auto elementPtr = ct.getCompilerContext().builder->CreateGEP(
+            structType,
+            structPtr,
+            {ConstantInt::get(llvm::Type::getInt32Ty(ct.getContext()), 0),
+             ConstantInt::get(llvm::Type::getInt32Ty(ct.getContext()), idx)}
+        );
+        // TODO Add more types
+        if (structObjType.llvmType->getStructElementType(idx)->isIntegerTy(32)) {
+          vr.gepResult = builder.CreateBitCast(
+              elementPtr,
+              llvm::Type::getInt32PtrTy(ct.getContext())
+          );
+          vr.value = builder.CreateLoad(vr.gepResult);
+        }
+        else {
+          cerr << "memberAccess element type not supported " << structObjType.elementNames[idx] << endl;
+        }
+        return vr;
+      }
+      else {
+        cerr << "persistent var not found" << obj->getName();
+        abort();
+      }
+
+    }
+
+    std::string ExpMemberAccess::getObjName() { return this->obj->getName(); }
+
+    void StructBlock::postVisit(CompileTime &ct) {
+      ObjType objType;
+      objType.name = this->name->getName();
+      vector<llvm::Type*> elements;
+
+      for (const auto &_varDecl : this->varDecls->getChildren()) {
+        auto varDecl = dynamic_pointer_cast<VarDecl>(_varDecl);
+        auto elementObjType = ct.getType(varDecl->getType()->getName());
+        elements.push_back(elementObjType.llvmType);
+        objType.elementNames.push_back(varDecl->getName());
+      }
+
+      objType.llvmType = llvm::StructType::create(ct.getContext(), elements, objType.name);
+      ct.registerType(objType.name, objType);
+    }
   }
 }
 

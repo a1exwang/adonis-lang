@@ -48,17 +48,16 @@
 %define parse.trace
 %define parse.error verbose
 
-%token LEFTBRACE RIGHTBRACE
-%token COLON COMMA BANG DOT
-%token FN REF NV STRUCT LET
-%token PERSISTENT
-%token RIGHT_ARROW "->";
+%token FN STRUCT PERSISTENT
 %token SEMICOLON ";";
+%token COLON COMMA BANG
 %token QUOTE "'";
+%right RIGHT_ARROW
 %right EQ
 %left PLUS
-%token LEFTPAR "(";
-%token RIGHTPAR ")";
+%left DOT
+%token LEFTBRACE RIGHTBRACE
+%token LEFTPAR RIGHTPAR
 %token <std::shared_ptr<al::ast::StringLiteral>> STRING_LIT
 %token <std::shared_ptr<al::ast::Symbol>> SYMBOL_LIT
 %token <std::shared_ptr<al::ast::IntLiteral>> INT_LIT
@@ -84,12 +83,11 @@
 %type< std::shared_ptr<al::ast::ExpCall> > exp_op;
 %type< std::shared_ptr<al::ast::ExpCall> > exp_call;
 %type< std::shared_ptr<al::ast::ExpVarRef> > exp_var_ref;
+%type< std::shared_ptr<al::ast::ExpMemberAccess> > exp_member;
 
 %type< std::shared_ptr<al::ast::Type> > type;
 
-//%type< std::shared_ptr<al::ast::StructBlock> > struct_block;
-//%type< std::vector<std::tuple<std::string, std::shared_ptr<al::ast::Type>>> > struct_elements;
-//%type< std::tuple<std::shared_ptr<al::ast::Symbol>, std::shared_ptr<al::ast::Type>> > struct_element;
+%type< std::shared_ptr<al::ast::StructBlock> > struct_block;
 
 %start program
 
@@ -102,19 +100,17 @@ blocks: { $$ = std::make_shared<al::ast::Blocks>();  }
 
 block: persistent_block { $$ = $1; }
     | fn_block { $$ = $1; }
+    | struct_block { $$ = $1; }
 
 /* struct_block:
  *  struct User {
- *    name: string,
- *    name1: string,
+ *    name: int32;
+ *    name1: int32;
  *  }
-struct_block: STRUCT SYMBOL_LIT LEFTBRACE struct_elements RIGHTBRACE {
-    //$$ = std::make_shared<al::ast::StructBlock>($2, $4);
-  }
-struct_elements:
-    | struct_element struct_elements
-struct_element: var_decl COMMA
  */
+struct_block: STRUCT SYMBOL_LIT LEFTBRACE var_decls RIGHTBRACE {
+      $$ = std::make_shared<al::ast::StructBlock>($2, $4);
+    }
 
 persistent_block: PERSISTENT LEFTBRACE var_decls RIGHTBRACE {
       $$ = std::make_shared<al::ast::PersistentBlock>($3);
@@ -147,6 +143,7 @@ stmt: exp SEMICOLON { $$ = $1; }
 exp: exp_call { $$ = $1; }
     | exp_op { $$ = $1; }
     | exp_var_ref { $$ = $1; }
+    | exp_member { $$ = $1; }
     | INT_LIT { $$ = $1; }
 /*
     | exp_ctor
@@ -163,6 +160,8 @@ exp_op: exp PLUS exp {
     | exp EQ exp { $$ = std::make_shared<al::ast::ExpCall>("=", std::vector<std::shared_ptr<al::ast::Exp>>{$1, $3}); }
 
 exp_var_ref: SYMBOL_LIT { $$ = std::make_shared<al::ast::ExpVarRef>($1); }
+
+exp_member: SYMBOL_LIT DOT SYMBOL_LIT { $$ = std::make_shared<al::ast::ExpMemberAccess>($1, $3); }
 
 exps: { $$ = std::make_shared<al::ast::ExpList>(); }
     | exp exps { $$ = $2; $$->prependChild($1); }
