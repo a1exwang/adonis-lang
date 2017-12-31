@@ -42,3 +42,41 @@ adonis-lang is an programming language.
     - Reference counting in NVM pointers
     - Root pointers must be in static persistent memory
     - Garbage collection when recovery or out of NVRAM
+
+## Demo
+```
+// Same as C struct
+struct User {
+  i0: int32;
+  i1: int32;
+  i2: int32;
+}
+
+// Static persistent memory(similar to C static variable/global variable but persistent)
+persistent {
+  p0: int32;
+  p1: User;
+  p2: User;
+}
+
+// Entrypoint
+fn main() {
+  // It is trivial that this is atomic on amd64
+  p1.i0 = p1.i0 + 1;
+  p1.i2 = p1.i2 + 1;
+
+  // Deep copy struct
+  // NOTE: "User" struct is at least 12 bytes, > 8 bytes
+  // So it may not be atomic without adding tricks
+  // Here, the trick is to automatically call nvm_persist to finish writing data
+  // on NVM
+  // It is a all-success or all-failure operation
+  p2 = p1;
+
+  // Adonis makes sure that p2.i0 == p2.i2
+  putsInt(p2.i0);
+  putsInt(p2.i1);
+  putsInt(p2.i2);
+}
+
+```
