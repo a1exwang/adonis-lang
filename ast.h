@@ -126,6 +126,10 @@ namespace al {
           std::shared_ptr<Symbol> symbol = std::make_shared<Symbol>("void"),
           int attrs = None
       );
+      explicit Type(
+          std::shared_ptr<Type> originalType,
+          int attrs = None
+      ) :originalType(originalType), attrs(attrs) { }
       /**
        * e.g. int32, *int32, *User
        */
@@ -133,10 +137,11 @@ namespace al {
       /**
        * For *int32 returns int32
        */
-      std::string getBaseName() const;
+      std::string getOriginalTypeName() const;
       bool isVoid();
     private:
       sp<Symbol> symbol;
+      sp<Type> originalType;
       int attrs;
     };
 

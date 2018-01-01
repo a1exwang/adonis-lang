@@ -111,4 +111,13 @@ DLLEXPORT void persistNvmVarByAddr(char *ptr, uint64_t size) {
 //  cerr << "nvm memory nout found: " << (void*)ptr << " " << size << endl;
 }
 
+DLLEXPORT void nvAllocInt32(int **i32) {
+  *i32 = nullptr;
+  auto ptr = nvm_reserve(sizeof(int));
+  nvm_persist(ptr, sizeof(int));
+  nvm_activate(ptr, (void **)i32, ptr, nullptr, nullptr);
+  // TODO i32 is a relative pointer, but in al we assure all pointers are absolute pointers
+  *i32 = (int*)nvm_abs(*i32);
+}
+
 }

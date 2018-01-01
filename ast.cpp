@@ -44,7 +44,7 @@ namespace al {
         return symbol->getName();
       }
       else if (attrs & Type::Ptr) {
-        return "*" + symbol->getName();
+        return "*" + originalType->getName();
       }
       else {
         cerr << "Wrong type attr" << endl;
@@ -54,7 +54,7 @@ namespace al {
 
     bool Type::isVoid() { return symbol->getName() == "void"; }
 
-    std::string Type::getBaseName() const { return symbol->getName(); }
+    std::string Type::getOriginalTypeName() const { return symbol->getName(); }
 
     ExpCall::ExpCall(const std::shared_ptr<Symbol> &name, std::vector<std::shared_ptr<Exp>> exps)
         :ExpCall(name->getName(), exps) {}

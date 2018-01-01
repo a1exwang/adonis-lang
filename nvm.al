@@ -10,11 +10,13 @@ persistent {
   p2: User
   pp4: *int32
   pp5: *User
+  pp6: *int32
 }
 
 extern {
   fn putsInt(val: int32);
   fn plus(i1: int32, i2: int32) int32;
+  fn nvAllocInt32(pp: **int32);
 }
 
 fn AL__main() {
@@ -34,4 +36,8 @@ fn AL__main() {
   pp5 = &p1;
   (*pp5).i0 = 23332;
   putsInt((*pp5).i0);
+
+  nvAllocInt32(&pp6);
+  *pp6 = *pp6 + 2;
+  putsInt(*pp6);
 }

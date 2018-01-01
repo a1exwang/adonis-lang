@@ -207,7 +207,7 @@ var_decl: SYMBOL_LIT COLON type {
 }
 
 type: SYMBOL_LIT { $$ = std::make_shared<al::ast::Type>($1); }
-    | STAR SYMBOL_LIT { $$ = std::make_shared<al::ast::Type>($2, al::ast::Type::Ptr); }
+    | STAR type { $$ = std::make_shared<al::ast::Type>($2, al::ast::Type::Ptr); }
 
 %%
 void al::Parser::error(const location &loc , const std::string &message) {
