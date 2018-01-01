@@ -120,11 +120,24 @@ namespace al {
     };
     class Type :public ASTNode {
     public:
-      Type(std::shared_ptr<Symbol> symbol = std::make_shared<Symbol>("void"));
+      enum { None = 0, Ptr = 1, Ref = 2, Persistent = 4 };
+
+      explicit Type(
+          std::shared_ptr<Symbol> symbol = std::make_shared<Symbol>("void"),
+          int attrs = None
+      );
+      /**
+       * e.g. int32, *int32, *User
+       */
       std::string getName() const;
+      /**
+       * For *int32 returns int32
+       */
+      std::string getBaseName() const;
       bool isVoid();
     private:
       sp<Symbol> symbol;
+      int attrs;
     };
 
     class Stmt :public ASTNode {
@@ -169,6 +182,11 @@ namespace al {
     private:
       std::string name;
     };
+    class ExpAssign :public Exp {
+    public:
+      ExpAssign(const sp<Exp> &lhs, const sp<Exp> &rhs) { appendChild(lhs); appendChild(rhs); }
+      void postVisit(CompileTime &ct) override;
+    };
     class ExpVarRef :public Exp {
     public:
       explicit ExpVarRef(sp<Symbol> name) :name(std::move(name)) {}
@@ -177,7 +195,6 @@ namespace al {
     private:
       sp<Symbol> name;
     };
-
     class ExpMemberAccess :public Exp {
     public:
       ExpMemberAccess(sp<Symbol> obj, sp<Symbol> member) :obj(std::move(obj)), member(std::move(member)) {}
@@ -186,6 +203,15 @@ namespace al {
     private:
       sp<Symbol> obj;
       sp<Symbol> member;
+    };
+    class ExpGetAddr :public Exp {
+    public:
+      explicit ExpGetAddr(sp<Exp> exp) { appendChild(exp); }
+      void postVisit(CompileTime &ct) override;
+    };
+    class ExpDeref :public Exp {
+    public:
+      explicit ExpDeref(sp<Exp> exp) { appendChild(exp); }
     };
 
     class ExpList :public ASTNode {

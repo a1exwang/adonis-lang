@@ -420,15 +420,18 @@ void al::CompileTime::registerPersistentVar(const std::string &name, const std::
 }
 
 void al::CompileTime::registerBuiltinTypes() {
-  ObjType objType;
-  objType.name = "int32";
-  objType.llvmType = llvm::Type::getInt32Ty(theContext);
-  this->registerType("int32", objType);
 
-  ObjType voidTy;
-  voidTy.name = "void";
-  voidTy.llvmType = llvm::Type::getVoidTy(theContext);
-  this->registerType("void", voidTy);
+  std::vector<std::pair<std::string, llvm::Type*>> types = {
+      {"int32", llvm::Type::getInt32Ty(theContext)},
+      {"*int32", llvm::Type::getInt32PtrTy(theContext)},
+      {"void", llvm::Type::getVoidTy(theContext)},
+  };
+  for (auto &t1 : types) {
+    ObjType ty;
+    ty.name = t1.first;
+    ty.llvmType = t1.second;
+    this->registerType(ty.name, ty);
+  }
 }
 
 llvm::Value *al::CompileTime::createGetMemNvmVar(const std::string &name) {

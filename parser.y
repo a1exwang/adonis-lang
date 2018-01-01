@@ -54,7 +54,9 @@
 %token QUOTE "'";
 %right RIGHT_ARROW
 %right EQ
+%left AND
 %left PLUS
+%left STAR
 %left DOT
 %token LEFTBRACE RIGHTBRACE
 %token LEFTPAR RIGHTPAR
@@ -81,9 +83,13 @@
 
 %type< std::shared_ptr<al::ast::Exp> > exp;
 %type< std::shared_ptr<al::ast::ExpCall> > exp_op;
+%type< std::shared_ptr<al::ast::ExpAssign> > exp_assign;
 %type< std::shared_ptr<al::ast::ExpCall> > exp_call;
 %type< std::shared_ptr<al::ast::ExpVarRef> > exp_var_ref;
 %type< std::shared_ptr<al::ast::ExpMemberAccess> > exp_member;
+%type< std::shared_ptr<al::ast::Literal> > exp_lit;
+%type< std::shared_ptr<al::ast::ExpDeref> > exp_deref;
+%type< std::shared_ptr<al::ast::ExpGetAddr> > exp_get_addr;
 
 %type< std::shared_ptr<al::ast::Type> > type;
 
@@ -159,13 +165,12 @@ stmt: exp SEMICOLON { $$ = $1; }
 
 exp: exp_call { $$ = $1; }
     | exp_op { $$ = $1; }
+    | exp_assign { $$ = $1; }
     | exp_var_ref { $$ = $1; }
     | exp_member { $$ = $1; }
-    | INT_LIT { $$ = $1; }
-/*
-    | exp_ctor
-    | exp_nvctor
-*/
+    | exp_lit { $$ = $1; }
+    | exp_get_addr { $$ = $1; }
+    | exp_deref { $$ = $1; }
 
 exp_call: SYMBOL_LIT LEFTPAR exps RIGHTPAR {
       $$ = std::make_shared<al::ast::ExpCall>($1, $3->toVector());
@@ -174,12 +179,15 @@ exp_call: SYMBOL_LIT LEFTPAR exps RIGHTPAR {
       $$ = std::make_shared<al::ast::ExpCall>($1, std::vector<std::shared_ptr<al::ast::Exp>>());
     }
 exp_op: exp PLUS exp {
-      $$ = std::make_shared<al::ast::ExpCall>("+", std::vector<std::shared_ptr<al::ast::Exp>>({$1, $3})); }
-    | exp EQ exp { $$ = std::make_shared<al::ast::ExpCall>("=", std::vector<std::shared_ptr<al::ast::Exp>>{$1, $3}); }
+      $$ = std::make_shared<al::ast::ExpCall>("+", std::vector<std::shared_ptr<al::ast::Exp>>({$1, $3}));
+      }
+exp_assign: exp EQ exp { $$ = std::make_shared<al::ast::ExpAssign>($1, $3); }
 
 exp_var_ref: SYMBOL_LIT { $$ = std::make_shared<al::ast::ExpVarRef>($1); }
-
 exp_member: SYMBOL_LIT DOT SYMBOL_LIT { $$ = std::make_shared<al::ast::ExpMemberAccess>($1, $3); }
+exp_lit: INT_LIT { $$ = $1; }
+exp_get_addr: AND exp { $$ = std::make_shared<al::ast::ExpGetAddr>($2); }
+exp_deref: STAR exp {}
 
 exps: exp { $$ = std::make_shared<al::ast::ExpList>(); $$->prependChild($1); }
     | exp COMMA exps { $$ = $3; $$->prependChild($1); }
@@ -189,6 +197,7 @@ var_decl: SYMBOL_LIT COLON type {
     $$ = std::make_shared<al::ast::VarDecl>($1, $3);
 }
 type: SYMBOL_LIT { $$ = std::make_shared<al::ast::Type>($1); }
+    | STAR SYMBOL_LIT { $$ = std::make_shared<al::ast::Type>($2, al::ast::Type::Ptr); }
 
 %%
 void al::Parser::error(const location &loc , const std::string &message) {

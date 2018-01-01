@@ -6,6 +6,7 @@ struct User {
 
 persistent {
   p0: int32
+  pp4: *int32
   p1: User
   p2: User
 }
@@ -16,6 +17,8 @@ extern {
 }
 
 fn AL__main() {
+  pp4 = &p0;
+
   p1.i0 = p1.i0 + 1;
   p1.i2 = p1.i2 + 1;
 
