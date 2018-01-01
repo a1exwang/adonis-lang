@@ -55,44 +55,58 @@ adonis-lang is an programming language.
     - Root pointers must be in static persistent memory
     - Garbage collection when recovery or out of NVRAM
 
-## Demo
+## Learn by Examples
 ```
-// Same as C struct
+// Declare a struct
 struct User {
-  i0: int32;
-  i1: int32;
-  i2: int32;
+  i0: int32
+  i1: int32
+  i2: int32
 }
 
-// Static persistent memory(similar to C static variable/global variable but persistent)
+// Declare a persistent block
+// All variables declared here are like C static/global variables,
+// but they live in NVM
 persistent {
-  p0: int32;
-  p1: User;
-  p2: User;
+  // built-in type
+  p0: int32
+  // struct type
+  p1: User
+  p2: User
+  // pointer type
+  pp4: *int32
+  pp5: *User
 }
 
+// External functions and variables
 extern {
-  fn plus(a: int32, b: int32) int32;
+  fn putsInt(val: int32);
+  fn plus(i1: int32, i2: int32) int32;
 }
 
-// Entrypoint
-fn main() {
-  // It is trivial that this is atomic on amd64
+
+// Function definition
+fn AL__main() {
+
+  // assignment operator, member access operator, plus operator
   p1.i0 = p1.i0 + 1;
   p1.i2 = p1.i2 + 1;
 
-  // Deep copy struct
-  // NOTE: "User" struct is at least 12 bytes, > 8 bytes
-  // So it may not be atomic without adding tricks
-  // Here, the trick is to automatically call nvm_persist to finish writing data
-  // on NVM
-  // It is a all-success or all-failure operation
+  // copy assignment operator
   p2 = p1;
 
-  // Adonis makes sure that p2.i0 == p2.i2
+  // function call
   putsInt(p2.i0);
   putsInt(p2.i1);
   putsInt(p2.i2);
-}
+  putsInt(plus(p2.i0, p2.i2));
 
+  // address-of operator
+  pp4 = &p1.i0;
+  // dereference operator
+  putsInt(*pp4);
+
+  pp5 = &p2;
+  putsInt((*pp5).i0);
+}
 ```

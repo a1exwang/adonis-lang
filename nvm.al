@@ -6,9 +6,10 @@ struct User {
 
 persistent {
   p0: int32
-  pp4: *int32
   p1: User
   p2: User
+  pp4: *int32
+  pp5: *User
 }
 
 extern {
@@ -17,7 +18,6 @@ extern {
 }
 
 fn AL__main() {
-  pp4 = &p0;
 
   p1.i0 = p1.i0 + 1;
   p1.i2 = p1.i2 + 1;
@@ -25,7 +25,13 @@ fn AL__main() {
   p2 = p1;
 
   putsInt(p2.i0);
-  putsInt(p2.i1);
   putsInt(p2.i2);
   putsInt(plus(p2.i0, p2.i2));
+
+  pp4 = &p1.i0;
+  putsInt(*pp4);
+
+  pp5 = &p1;
+  (*pp5).i0 = 23332;
+  putsInt((*pp5).i0);
 }

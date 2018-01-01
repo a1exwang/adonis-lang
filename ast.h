@@ -213,6 +213,7 @@ namespace al {
     class ExpDeref :public Exp {
     public:
       explicit ExpDeref(sp<Exp> exp) { appendChild(exp); }
+      void postVisit(CompileTime &ct) override;
     };
 
     class ExpList :public ASTNode {

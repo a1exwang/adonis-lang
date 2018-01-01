@@ -127,23 +127,22 @@ struct_block: STRUCT SYMBOL_LIT LEFTBRACE var_decls RIGHTBRACE {
 persistent_block: PERSISTENT LEFTBRACE var_decls RIGHTBRACE {
       $$ = std::make_shared<al::ast::PersistentBlock>($3);
     }
+
 extern_block: EXTERN LEFTBRACE decls RIGHTBRACE {
       $$ = std::make_shared<al::ast::ExternBlock>($3);
     }
-
 decls: { $$ = std::make_shared<al::ast::Decls>(); }
     | fn_decl SEMICOLON decls { $$ = $3; $$->prependChild($1); }
     | var_decl SEMICOLON decls { $$ = $3; $$->prependChild($1); }
-
-var_decls: var_decl { $$ = std::make_shared<al::ast::VarDecls>(); $$->prependChild($1); }
-    | var_decl var_decls { $$ = $2; $$->prependChild($1); }
-    | var_decl COMMA var_decls { $$ = $3; $$->prependChild($1); }
 
 /* fn_block
  * fn add(a: int, b: int) int {
  *    a + b
  * }
  */
+var_decls: var_decl { $$ = std::make_shared<al::ast::VarDecls>(); $$->prependChild($1); }
+    | var_decl var_decls { $$ = $2; $$->prependChild($1); }
+    | var_decl COMMA var_decls { $$ = $3; $$->prependChild($1); }
 fn_args: var_decls { $$ = $1; }
 fn_decl: FN SYMBOL_LIT LEFTPAR fn_args RIGHTPAR {
       $$ = std::make_shared<al::ast::FnDecl>($2, std::make_shared<al::ast::Type>(), $4);
@@ -155,14 +154,20 @@ fn_block: fn_decl stmt_block {
         $$ = std::make_shared<al::ast::FnDef>($1, $2);
     }
 
+/* stmt_block
+ * { a = 1; putsInt(123); }
+ */
 stmt_block: LEFTBRACE stmts RIGHTBRACE {
         $$ = std::make_shared<al::ast::StmtBlock>($2);
     }
 stmts: { $$ = std::make_shared<al::ast::Stmts>(); }
     | stmt stmts { $$ = $2; $$->prependChild($1); }
 stmt: exp SEMICOLON { $$ = $1; }
-//    | LET SYMBOL_LIT EQ exp SEMICOLON
 
+/**
+ * exp
+ * every exp returns a value
+ */
 exp: exp_call { $$ = $1; }
     | exp_op { $$ = $1; }
     | exp_assign { $$ = $1; }
@@ -188,15 +193,19 @@ exp_var_ref: SYMBOL_LIT { $$ = std::make_shared<al::ast::ExpVarRef>($1); }
 exp_member: exp DOT SYMBOL_LIT { $$ = std::make_shared<al::ast::ExpMemberAccess>($1, $3); }
 exp_lit: INT_LIT { $$ = $1; }
 exp_get_addr: AND exp { $$ = std::make_shared<al::ast::ExpGetAddr>($2); }
-exp_deref: STAR exp {}
+exp_deref: STAR exp { $$ = std::make_shared<al::ast::ExpDeref>($2); }
 
 exps: exp { $$ = std::make_shared<al::ast::ExpList>(); $$->prependChild($1); }
     | exp COMMA exps { $$ = $3; $$->prependChild($1); }
 
-
+/**
+ * Something like:
+ * name: string
+ */
 var_decl: SYMBOL_LIT COLON type {
     $$ = std::make_shared<al::ast::VarDecl>($1, $3);
 }
+
 type: SYMBOL_LIT { $$ = std::make_shared<al::ast::Type>($1); }
     | STAR SYMBOL_LIT { $$ = std::make_shared<al::ast::Type>($2, al::ast::Type::Ptr); }
 

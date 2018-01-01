@@ -42,6 +42,11 @@ namespace al {
     std::vector<std::string> elementNames;
   };
 
+  enum PtrAddressSpace {
+    Volatile = 0,
+    NVM = 1
+  };
+
   struct CompilerContext {
   public:
     CompilerContext(llvm::LLVMContext &c, llvm::Function *function, llvm::BasicBlock *bb)
@@ -68,7 +73,6 @@ namespace al {
     void registerBuiltinTypes();
     llvm::Module* getMainModule() const;
 
-    llvm::StructType *getValueType() const { return valueType; }
     std::unique_ptr<llvm::Module> &&moveMainModule() { return std::move(mainModule); }
 
     llvm::Function *getHowAreYouFn() const { return this->howAreYou; }
@@ -93,37 +97,23 @@ namespace al {
       return this->persistentSymbolTable.find(name) != persistentSymbolTable.end();
     }
     void createSetPersistentVar(const std::string &name, llvm::Value*);
+    void createCommitPersistentVar(llvm::Value *nvmPtr, llvm::Value *size);
     void registerPersistentVar(const std::string &name, const std::string &type);
     std::string getPersistentVarType(const std::string &name) { return this->persistentSymbolTable[name]; }
 
     void registerType(const std::string &name, ObjType type) {
       this->typeTable[name] = type;
     }
-    bool hasType(const std::string &name) const {
-      return this->typeTable.find(name) != this->typeTable.end();
-    }
-    ObjType getType(const std::string &name) {
-      return this->typeTable[name];
-    }
+    bool hasType(const std::string &name) const;
+    ObjType getType(const std::string &name);
 
   public:
-    static llvm::Value *getStructSize(llvm::IRBuilder<> &builder, llvm::Type *s);
+    static llvm::Value *getTypeSize(llvm::IRBuilder<> &builder, llvm::Type *s);
 
-//  private:
-  public:
-    std::string nextConstVarName();
+  private:
 
-    struct {
-      llvm::Function *printf;
-    } fns;
     llvm::Function *mainFunction;
     llvm::Function *howAreYou;
-
-    llvm::StructType *valueType;
-    llvm::PointerType *valuePtrType;
-    llvm::StructType *stringType;
-    llvm::StructType *arrayType;
-
     std::shared_ptr<ast::ASTNode> root;
 
     llvm::LLVMContext theContext;
@@ -132,7 +122,6 @@ namespace al {
     std::vector<llvm::BasicBlock*> currentBlocks;
     int strCounter;
 
-    std::map<std::string, llvm::Module*> symbolTable;
     std::vector<CompilerContext> compilerContextStack;
     std::map<std::string, std::string> persistentSymbolTable;
     std::map<std::string, ObjType> typeTable;

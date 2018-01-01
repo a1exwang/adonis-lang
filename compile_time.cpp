@@ -177,7 +177,7 @@ llvm::Value *al::CompileTime::createGetMemNvmVar(const std::string &name) {
   }
 
   int varId = name[name.size() - 1] - '0';
-  auto t = this->typeTable.find(this->persistentSymbolTable.find(name)->second)->second.llvmType;
+  auto t = this->getType(this->getPersistentVarType(name)).llvmType;
 
   return createGetMemNvmVar(PointerType::get(t, 0), varId);
 }
@@ -189,7 +189,7 @@ void al::CompileTime::createSetMemNvmVar(const std::string &name, llvm::Value *p
   }
 
   int varId = name[name.size() - 1] - '0';
-  auto t = this->typeTable.find(this->persistentSymbolTable.find(name)->second)->second.llvmType;
+  auto t = this->getType(this->getPersistentVarType(name)).llvmType;
   auto sizeVal = this->getCompilerContext().builder->CreatePtrToInt(
       this->getCompilerContext().builder->CreateGEP(
           t,
@@ -217,11 +217,7 @@ void al::CompileTime::createSetMemNvmVar(const std::string &name, llvm::Value *p
   );
 }
 
-llvm::Value *al::CompileTime::getStructSize(IRBuilder<> &builder, llvm::Type *s) {
-  if (!s->isStructTy()) {
-    cerr << "not a struct" << endl;
-    abort();
-  }
+llvm::Value *al::CompileTime::getTypeSize(IRBuilder<> &builder, llvm::Type *s) {
   auto sizeVal = builder.CreatePtrToInt(
       builder.CreateGEP(
           s,
@@ -260,5 +256,51 @@ llvm::Value *al::CompileTime::createGetMemNvmVar(llvm::PointerType *nvmPtrType, 
           }
       ),
       nvmPtrType
+  );
+}
+
+al::ObjType al::CompileTime::getType(const std::string &name) {
+  if (!name.empty() && name[0] == '*') {
+    ObjType ret;
+    auto derefType = name.substr(1, name.size() - 1);
+    auto a = getType(derefType);
+    ret.llvmType = PointerType::get(a.llvmType, 0);
+    ret.name = name;
+    return ret;
+  }
+  return this->typeTable[name];
+}
+
+bool al::CompileTime::hasType(const std::string &name) const {
+  if (!name.empty() && name[0] == '*') {
+    auto derefType = name.substr(1, name.size() - 1);
+    return hasType(derefType);
+  }
+  else {
+    return this->typeTable.find(name) != this->typeTable.end();
+  }
+}
+
+void al::CompileTime::createCommitPersistentVar(llvm::Value *nvmPtr, llvm::Value *size) {
+  if (!nvmPtr->getType()->isPointerTy() || !size->getType()->isIntegerTy()) {
+    cerr << "nvmPtr must be a ptr and size must be an integer" << endl;
+    abort();
+  }
+  auto fn = getMainModule()->getOrInsertFunction(
+      "persistNvmVarByAddr",
+      FunctionType::get(
+          Type::getVoidTy(theContext), {
+              Type::getInt32PtrTy(theContext),
+              Type::getInt64Ty(theContext)
+          },
+          false
+      )
+  );
+
+  getCompilerContext().builder->CreateCall(
+      fn, {
+          getCompilerContext().builder->CreatePointerCast(nvmPtr, Type::getInt32PtrTy(theContext)),
+          size
+      }
   );
 }

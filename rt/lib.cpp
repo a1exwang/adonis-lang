@@ -20,8 +20,17 @@ using namespace std;
 #define DLLEXPORT
 #endif
 
+string getNvmVarNameById(int id) {
+  string name;
+  stringstream ss;
+  ss << "nvm_" << id;
+  ss >> name;
+  return name;
+}
 
 extern "C" {
+std::map<std::pair<void*, uint64_t>, string> nvmVarMap;
+
 DLLEXPORT void howAreYou() {
   cout << "howareyou" << endl;
 }
@@ -38,20 +47,6 @@ DLLEXPORT void putsInt(int32_t i) {
   cout << i << endl;
 }
 
-DLLEXPORT int getIntNvmVar(int intId) {
-  string name;
-  stringstream ss;
-  ss << intId;
-  ss >> name;
-  int *p = (int*) nvm_get_id(name.c_str());
-  if (p == nullptr) {
-    p = (int *) nvm_reserve_id(name.c_str(), 4);
-    *p = 0;
-    nvm_persist(p, 4);
-    nvm_activate_id(name.c_str());
-  }
-  return *p;
-}
 DLLEXPORT void setIntNvmVar(int intId, int value) {
   string name;
   stringstream ss;
@@ -67,23 +62,23 @@ DLLEXPORT void setIntNvmVar(int intId, int value) {
   nvm_activate_id(name.c_str());
 }
 
+
 DLLEXPORT void *getNvmVar(int id, uint64_t size) {
-  string name;
-  stringstream ss;
-  ss << "nvm_" << id;
-  ss >> name;
+  auto name = getNvmVarNameById(id);
   void *p = nvm_get_id(name.c_str());
   if (p == nullptr) {
     p = nvm_reserve_id(name.c_str(), size);
   }
+  nvmVarMap[{p, size}] = name;
 
   return p;
 }
+DLLEXPORT int getIntNvmVar(int intId) {
+  int *p = (int*)getNvmVar(intId, 4);
+  return *p;
+}
 DLLEXPORT void persistNvmVar(int id, uint64_t size) {
-  string name;
-  stringstream ss;
-  ss << "nvm_" << id;
-  ss >> name;
+  auto name = getNvmVarNameById(id);
   void *p = nvm_get_id(name.c_str());
   if (p == nullptr) {
     p = nvm_reserve_id(name.c_str(), size);
@@ -92,4 +87,28 @@ DLLEXPORT void persistNvmVar(int id, uint64_t size) {
   nvm_persist(p, size);
   nvm_activate_id(name.c_str());
 }
+
+DLLEXPORT void persistNvmVarByAddr(char *ptr, uint64_t size) {
+  nvm_persist(ptr, size);
+
+  if (nvmVarMap.find({ptr, size}) != nvmVarMap.end()) {
+    auto name = nvmVarMap[{ptr, size}];
+    nvm_activate_id(name.c_str());
+    return;
+  }
+  else {
+    // TODO, optimize, get name with a sorted list and bin-search
+    for (auto item : nvmVarMap) {
+      if (item.first.first <= ptr && ptr < (char*)item.first.first + item.first.second) {
+        auto name = item.second;
+//        cerr << "inner nvm memory found: " << name << ", " << (void*)ptr << ", offset " << (void*)(ptr - (char*)item.first.first) << endl;
+        nvm_activate_id(name.c_str());
+        return;
+      }
+    }
+  }
+
+//  cerr << "nvm memory nout found: " << (void*)ptr << " " << size << endl;
+}
+
 }
