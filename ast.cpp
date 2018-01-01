@@ -20,13 +20,6 @@ namespace al {
                 << std::endl;
     }
 
-    VisitResult StringLiteral::genVisitResult(CompileTime &ct) {
-      VisitResult vr;
-//        vr.value = createStringTypeObject(this->s);
-      vr.value = ct.castStringToValuePtr(ct.createStringValuePtr(getValue(), ct.getBuilder()));
-      return vr;
-    }
-
     void ExpList::preVisit(CompileTime &) {
       std::cout << std::string((uint32_t)this->indent, '\t')
                 << "exp_list" << std::endl;
@@ -36,7 +29,6 @@ namespace al {
     void ExpList::postVisit(CompileTime &) {
       this->decIndent();
     }
-
 
     void Symbol::preVisit(CompileTime &) {
 //      std::cout << std::string((uint32_t)this->indent, '\t')
@@ -67,13 +59,12 @@ namespace al {
     ExpCall::ExpCall(const std::shared_ptr<Symbol> &name, std::vector<std::shared_ptr<Exp>> exps)
         :ExpCall(name->getName(), exps) {}
 
-    VisitResult ExpCall::visit(CompileTime &ct) {
+    void ExpCall::postVisit(CompileTime &ct) {
       std::vector<llvm::Value*> args;
       auto exps = this->getChildren();
       for (const auto &_exp : exps) {
         auto exp = dynamic_pointer_cast<Exp>(_exp);
-        auto vr = exp->visit(ct);
-        args.push_back(vr.value);
+        args.push_back(exp->getVR().value);
       }
 
       Function *fn = nullptr;
@@ -87,19 +78,15 @@ namespace al {
             args[0],
             args[1]
         );
-        return vr;
       }
       else {
         fn = ct.getMainModule()->getFunction(this->name);
+        if (fn == nullptr) {
+          cerr << "Function not found '" << this->name << "'" << endl;
+          abort();
+        }
+        vr.value = ct.getCompilerContext().builder->CreateCall(fn, args);
       }
-
-      if (fn == nullptr) {
-        cerr << "Function not found '" << this->name << "'" << endl;
-        abort();
-      }
-      VisitResult vr;
-      vr.value = ct.getCompilerContext().builder->CreateCall(fn, args);
-      return vr;
     }
 
     void FnDef::preVisit(CompileTime &rt) {
@@ -113,8 +100,6 @@ namespace al {
         );
       }
       CompilerContext cc(rt.getContext(), fn, BasicBlock::Create(rt.getContext(), "entry", fn));
-//      cc.builder.CreateCall(rt.getHowAreYouFn(), {});
-
       rt.pushContext(cc);
     }
 
@@ -140,11 +125,14 @@ namespace al {
         if (ct.getType(type).llvmType->isStructTy()) {
           vr.gepResult = ct.createGetMemNvmVar(this->name->getName());
         }
-        else if (ct.getType(type).name == "int32") {
+        else if (ct.getType(type).llvmType->isIntegerTy(32)) {
           vr.value = ct.createGetIntNvmVar(this->name->getName());
+          vr.gepResult = ct.createGetMemNvmVar(this->name->getName());
         }
-        else if (ct.getType(type).name == "*int32") {
-          vr.value = ct.createGetMemNvmVar(this->name->getName());
+        else if (ct.getType(type).llvmType->isPointerTy()) {
+          auto ptr = ct.createGetMemNvmVar(this->name->getName());
+          vr.value = ct.getCompilerContext().builder->CreateLoad(ptr);
+          vr.gepResult = ptr;
         }
         else {
           cerr << "persistent var type not supported '" << this->name->getName() << "'" << endl;
@@ -188,12 +176,16 @@ namespace al {
 
     sp<Type> VarDecl::getType() { return std::dynamic_pointer_cast<Type>(getChildren()[0]); }
 
-    VisitResult ExpMemberAccess::visit(CompileTime &ct) {
+    void ExpMemberAccess::postVisit(CompileTime &ct) {
       auto &builder = *ct.getCompilerContext().builder;
-      if (ct.hasPersistentVar(obj->getName())) {
-        auto nvmPtr = ct.createGetMemNvmVar(obj->getName());
-
-        auto structObjType = ct.getType(ct.getPersistentVarType(obj->getName()));
+      auto nvmPtr = obj->getVR().gepResult;
+      if (nvmPtr == nullptr) {
+        cerr << "lhs is not a valid struct obj" << endl;
+        abort();
+      } else {
+        auto structType = nvmPtr->getType()->getPointerElementType();
+        // TODO
+        ObjType structObjType = ct.getType(structType->getStructName());
         uint64_t idx = structObjType.elementNames.size();
         for (uint64_t i = 0; i < structObjType.elementNames.size(); ++i) {
           if (structObjType.elementNames[i] == member->getName()) {
@@ -205,7 +197,6 @@ namespace al {
           cerr << "object member does not exist '" << member->getName() << "'" << endl;
           abort();
         }
-        auto structType = structObjType.llvmType;
         auto structPtr = builder.CreatePointerCast(
             nvmPtr, llvm::PointerType::get(structType, 0)
         );
@@ -225,17 +216,10 @@ namespace al {
         }
         else {
           cerr << "memberAccess element type not supported " << structObjType.elementNames[idx] << endl;
+          abort();
         }
-        return vr;
       }
-      else {
-        cerr << "persistent var not found" << obj->getName();
-        abort();
-      }
-
     }
-
-    std::string ExpMemberAccess::getObjName() { return this->obj->getName(); }
 
     void StructBlock::postVisit(CompileTime &ct) {
       ObjType objType;
@@ -315,88 +299,128 @@ namespace al {
       if (exps.size() != 2) { cerr << "'=' only accepts 2 args" << endl; abort(); }
 
       auto rhs = dynamic_pointer_cast<Exp>(exps[1]);
-      auto ptr = dynamic_pointer_cast<ExpVarRef>(exps[0]);
-      if (ptr == nullptr) {
-        // MemberAccess
-        auto lhs = dynamic_pointer_cast<ExpMemberAccess>(exps[0]);
-        if (lhs == nullptr) {
-          cerr << "'=' operator accepts a symbol or memberaccess as the first arg" << endl;
-          abort();
-        }
-        auto elementType =
-            static_cast<llvm::PointerType*>(lhs->getVR().gepResult->getType())->getElementType();
+      auto rhsVal = rhs->getVR().value;
+      auto rhsPtr = rhs->getVR().gepResult;
 
-        // TODO support more types
-        if (elementType->isIntegerTy(32)) {
-          ct.getCompilerContext().builder->CreateStore(
-              rhs->getVR().value,
-              lhs->getVR().gepResult
-          );
-        }
-        else if (elementType->isStructTy()) {
-          auto lhsPtr = lhs->getVR().gepResult;
-          auto rhsPtr = rhs->getVR().gepResult;
-          ct.getCompilerContext().builder->CreateMemCpy(
-              lhsPtr,
-              rhsPtr,
-              CompileTime::getStructSize(
-                  *ct.getCompilerContext().builder,
-                  static_cast<PointerType*>(rhsPtr->getType())->getElementType()),
-              8
-          );
-          vr.gepResult = rhsPtr;
-        }
-        else {
-          cerr << "type not supported" << endl;
-          elementType->dump();
-          abort();
-        }
+      auto lhsPtr = exps[0]->getVR().gepResult;
+      auto elementType = lhsPtr->getType()->getPointerElementType();
+
+      // TODO support more types
+      if (elementType->isIntegerTy(32)) {
+        ct.getCompilerContext().builder->CreateStore(
+            rhsVal,
+            lhsPtr
+        );
         vr = rhs->getVR();
-
-        // commit
-        ct.createSetMemNvmVar(lhs->getObjName(), lhs->getVR().gepResult);
-      } else {
-        // var/global assignment
-        auto varName = ptr->getName();
-
-        if (ct.hasPersistentVar(varName)) {
-          if (ct.getPersistentVarType(varName) == "int32") {
-            ct.createSetPersistentVar(varName, rhs->getVR().value);
-          }
-          else if (ct.getPersistentVarType(varName) == "*int32") {
-            // store ptr into lhs
-            auto lhsPtr = ct.createGetMemNvmVar(varName);
-            auto rhsPtr = rhs->getVR().value;
-            ct.getCompilerContext().builder->CreateMemCpy(
-                lhsPtr,
-                rhsPtr,
-                ConstantInt::get(llvm::Type::getInt32Ty(ct.getContext()), 8),
-                8
-            );
-            vr.gepResult = rhsPtr;
-
-          }
-          else {
-            auto lhsPtr = ct.createGetMemNvmVar(varName);
-            auto lhsType = ct.getType(ct.getPersistentVarType(varName));
-            auto rhsPtr = rhs->getVR().gepResult;
-            ct.getCompilerContext().builder->CreateMemCpy(
-                lhsPtr,
-                rhsPtr,
-                CompileTime::getStructSize(
-                    *ct.getCompilerContext().builder,
-                    lhsType.llvmType
-                ),
-                8
-            );
-            vr.gepResult = rhsPtr;
-          }
-        }
-        vr.value = rhs->getVR().value;
+      }
+      else if (elementType->isPointerTy()) {
+        ct.getCompilerContext().builder->CreateStore(
+            rhsVal,
+            lhsPtr
+        );
+        vr = rhs->getVR();
+      }
+      else if (elementType->isStructTy()) {
+        ct.getCompilerContext().builder->CreateMemCpy(
+            lhsPtr,
+            rhsPtr,
+            CompileTime::getStructSize(
+                *ct.getCompilerContext().builder,
+                rhsPtr->getType()->getPointerElementType()
+            ),
+            8
+        );
+        vr.gepResult = rhsPtr;
+        vr.value = nullptr;
+      }
+      else {
+        cerr << "type not supported" << endl;
+        elementType->dump();
+        abort();
       }
 
-    }
+//      if (ptr == nullptr) {
+//        // MemberAccess
+//        auto lhs = dynamic_pointer_cast<ExpMemberAccess>(exps[0]);
+//        if (lhs == nullptr) {
+//          cerr << "'=' operator accepts a symbol or memberaccess as the first arg" << endl;
+//          abort();
+//        }
+//        auto elementType =
+//            static_cast<llvm::PointerType*>(lhs->getVR().gepResult->getType())->getElementType();
+//
+//        // TODO support more types
+//        if (elementType->isIntegerTy(32)) {
+//          ct.getCompilerContext().builder->CreateStore(
+//              rhs->getVR().value,
+//              lhs->getVR().gepResult
+//          );
+//        }
+//        else if (elementType->isStructTy()) {
+//          auto lhsPtr = lhs->getVR().gepResult;
+//          auto rhsPtr = rhs->getVR().gepResult;
+//          ct.getCompilerContext().builder->CreateMemCpy(
+//              lhsPtr,
+//              rhsPtr,
+//              CompileTime::getStructSize(
+//                  *ct.getCompilerContext().builder,
+//                  static_cast<PointerType*>(rhsPtr->getType())->getElementType()),
+//              8
+//          );
+//          vr.gepResult = rhsPtr;
+//        }
+//        else {
+//          cerr << "type not supported" << endl;
+//          elementType->dump();
+//          abort();
+//        }
+//        vr = rhs->getVR();
+//
+//        // commit
+////        ct.createSetMemNvmVar(lhs->getObjName(), lhs->getVR().gepResult);
+//        // TODO: Store data into nvm mem
+//        abort();
+//      } else {
+//        // var/global assignment
+//        auto varName = ptr->getName();
+//
+//        if (ct.hasPersistentVar(varName)) {
+//          if (ct.getPersistentVarType(varName) == "int32") {
+//            ct.createSetPersistentVar(varName, rhs->getVR().value);
+//          }
+//          else if (ct.getPersistentVarType(varName) == "*int32") {
+//            // store ptr into lhs
+//            auto lhsPtr = ct.createGetMemNvmVar(varName);
+//            auto rhsPtr = rhs->getVR().value;
+//            ct.getCompilerContext().builder->CreateMemCpy(
+//                lhsPtr,
+//                rhsPtr,
+//                ConstantInt::get(llvm::Type::getInt32Ty(ct.getContext()), 8),
+//                8
+//            );
+//            vr.gepResult = rhsPtr;
+//
+//          }
+//          else {
+//            auto lhsPtr = ct.createGetMemNvmVar(varName);
+//            auto lhsType = ct.getType(ct.getPersistentVarType(varName));
+//            auto rhsPtr = rhs->getVR().gepResult;
+//            ct.getCompilerContext().builder->CreateMemCpy(
+//                lhsPtr,
+//                rhsPtr,
+//                CompileTime::getStructSize(
+//                    *ct.getCompilerContext().builder,
+//                    lhsType.llvmType
+//                ),
+//                8
+//            );
+//            vr.gepResult = rhsPtr;
+//          }
+//        }
+//        vr.value = rhs->getVR().value;
+//      }
 
+    }
 
     void ExpGetAddr::postVisit(CompileTime &ct) {
       auto pVar = dynamic_pointer_cast<ExpVarRef>(getChildren()[0]);

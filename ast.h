@@ -18,8 +18,8 @@ namespace al {
     struct VisitResult {
       VisitResult() :value() { }
       VisitResult(const std::nullptr_t &nptr) :value(nullptr) {}
-      llvm::Value *value;
-      llvm::Value *gepResult;
+      llvm::Value *value = nullptr;
+      llvm::Value *gepResult = nullptr;
     };
 
     // Visitor design pattern
@@ -177,7 +177,7 @@ namespace al {
         }
       }
       ExpCall(const std::shared_ptr<Symbol> &name, std::vector<std::shared_ptr<Exp>> exps);
-      VisitResult visit(CompileTime &ct) override;
+      void postVisit(CompileTime &ct) override;
 
     private:
       std::string name;
@@ -197,11 +197,12 @@ namespace al {
     };
     class ExpMemberAccess :public Exp {
     public:
-      ExpMemberAccess(sp<Symbol> obj, sp<Symbol> member) :obj(std::move(obj)), member(std::move(member)) {}
-      VisitResult visit(CompileTime &ct) override;
-      std::string getObjName();
+      ExpMemberAccess(sp<Exp> obj, sp<Symbol> member) :obj(obj), member(std::move(member)) {
+        appendChild(obj);
+      }
+      void postVisit(CompileTime &ct) override;
     private:
-      sp<Symbol> obj;
+      sp<Exp> obj;
       sp<Symbol> member;
     };
     class ExpGetAddr :public Exp {
@@ -256,7 +257,6 @@ namespace al {
       }
 
       void preVisit(CompileTime &) override;
-      VisitResult genVisitResult(CompileTime &ct) override;
 
     private:
       std::string s;

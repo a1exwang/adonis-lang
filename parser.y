@@ -171,6 +171,7 @@ exp: exp_call { $$ = $1; }
     | exp_lit { $$ = $1; }
     | exp_get_addr { $$ = $1; }
     | exp_deref { $$ = $1; }
+    | LEFTPAR exp RIGHTPAR { $$ = $2; }
 
 exp_call: SYMBOL_LIT LEFTPAR exps RIGHTPAR {
       $$ = std::make_shared<al::ast::ExpCall>($1, $3->toVector());
@@ -184,7 +185,7 @@ exp_op: exp PLUS exp {
 exp_assign: exp EQ exp { $$ = std::make_shared<al::ast::ExpAssign>($1, $3); }
 
 exp_var_ref: SYMBOL_LIT { $$ = std::make_shared<al::ast::ExpVarRef>($1); }
-exp_member: SYMBOL_LIT DOT SYMBOL_LIT { $$ = std::make_shared<al::ast::ExpMemberAccess>($1, $3); }
+exp_member: exp DOT SYMBOL_LIT { $$ = std::make_shared<al::ast::ExpMemberAccess>($1, $3); }
 exp_lit: INT_LIT { $$ = $1; }
 exp_get_addr: AND exp { $$ = std::make_shared<al::ast::ExpGetAddr>($2); }
 exp_deref: STAR exp {}

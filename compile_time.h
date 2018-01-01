@@ -62,28 +62,13 @@ namespace al {
     }
     void init1();
     void finish1();
-    void createFunction(llvm::Module &module, const std::string &name, std::vector<std::string> paramNames);
     void setupMainModule();
-    void createFnFunc();
     void createMainFunc();
-    void createLibFunc();
-    void createPrimitiveTypes();
-    void createPlaceHolderFunc(const std::string &name, int n);
-    void createPutsFunc();
     void traverse1();
     void registerBuiltinTypes();
-    llvm::BasicBlock* createFunctionBody(llvm::Module &module, const std::string &name);
     llvm::Module* getMainModule() const;
 
-    llvm::Value *createNullValuePtr();
-    llvm::Value *createStringValuePtr(const std::string &s, llvm::IRBuilder<> &builder);
-    llvm::Value *castStringToValuePtr(llvm::Value *);
-
-    llvm::PointerType *getStringPtrType() const;
-    llvm::StructType *getStringType() const;
     llvm::StructType *getValueType() const { return valueType; }
-    llvm::PointerType *getValuePtrType();
-    llvm::StructType *getArrayType() const { return arrayType; }
     std::unique_ptr<llvm::Module> &&moveMainModule() { return std::move(mainModule); }
 
     llvm::Function *getHowAreYouFn() const { return this->howAreYou; }
@@ -98,12 +83,11 @@ namespace al {
     llvm::BasicBlock *getCurrentBlock() const { return *(this->currentBlocks.end() - 1); }
     llvm::Function *getMainFunc() const { return mainFunction; }
 
-    llvm::IRBuilder<> &getBuilder() { return builder; }
-
     llvm::LLVMContext &getContext() { return theContext; }
 
     llvm::Value *createGetIntNvmVar(const std::string &name);
     llvm::Value *createGetMemNvmVar(const std::string &name);
+    llvm::Value *createGetMemNvmVar(llvm::PointerType *nvmPtrType, int id);
     void createSetMemNvmVar(const std::string &name, llvm::Value *ptr);
     bool hasPersistentVar(const std::string &name) const {
       return this->persistentSymbolTable.find(name) != persistentSymbolTable.end();
@@ -143,7 +127,6 @@ namespace al {
     std::shared_ptr<ast::ASTNode> root;
 
     llvm::LLVMContext theContext;
-    llvm::IRBuilder<> builder;
     std::unique_ptr<llvm::Module> mainModule;
 
     std::vector<llvm::BasicBlock*> currentBlocks;
