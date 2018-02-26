@@ -38,6 +38,7 @@ al::Parser::symbol_type al::Lexer::lex() {
   typedef std::function<Parser::symbol_type (const std::string &s)> LexFn;
   std::tuple<string, LexFn> tuples[] = {
       {"\\s+", nullptr},
+      {"#.*\n", nullptr},
       {
           "\\(",
           [](const std::string &s) -> Parser::symbol_type {
@@ -185,9 +186,11 @@ al::Parser::symbol_type al::Lexer::lex() {
   for (auto &tuple: tuples) {
     std::tie(reg, fn) = tuple;
     string var;
-    if (RE2::Consume(&input,"(" + reg + ")", &var)) {
-      // FIXME: i == 0 for blank characters
-      if (i != 0)
+
+    RE2 re("((?m:" + reg + "))");
+    if (RE2::Consume(&input, re, &var)) {
+      // FIXME: i == 0 for blank characters, i == 1 for comments
+      if (i >= 2)
         return fn(var);
     }
     i++;

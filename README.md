@@ -8,7 +8,7 @@ adonis-lang is an programming language.
 - llvm 5.0
 - Google RE2
 
-## Build 
+## Build
 
 - mkdir build
 - cd build
@@ -108,5 +108,66 @@ fn AL__main() {
 
   pp5 = &p2;
   putsInt((*pp5).i0);
+}
+```
+
+## Concurrency
+```
+pm: pmutx;
+
+// using persistent channel + move semantics
+fn producer0(ch: pchannel<User>) {
+  loop {
+    ch <- new_persistent_user();
+  }
+}
+
+fn producer1(ch: pchannel<User>) {
+  loop {
+    ch <- new_persistent_user();
+  }
+}
+
+fn consumer0(ch0: pchannel<User>, ch1: pchannel<User>) {
+  loop {
+    select {
+      u := <- ch0: {
+        puts(u.id);
+      }
+      u := <- ch1: {
+        puts(u.id);
+      }
+    }
+  }
+}
+
+fn main() {
+  persistent {
+    tx0, tx1: pchannel<User>::tx;
+    rx0, rx1: pchannel<User>::rx;
+  }
+  tx0, rx0 := pchannel<User>("ch0");
+  tx1, rx1 := pchannel<User>("ch1");
+
+  thread::spawn(producer0, tx0);
+  thread::spawn(producer1, tx1);
+  thread::spawn(consumer0, rx0, rx1);
+}
+```
+
+## Nested Transaction
+```
+fn main() {
+  x = 1;
+  y = 1;
+  transaction(x, y) "tx0" {
+    x += 1;
+    transaction(y) "tx1" {
+      y += 1;
+    }
+    y += 1;
+  }
+  puts(x);
+  puts(y);
 }
 ```

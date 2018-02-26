@@ -44,4 +44,3 @@ add_custom_target(
         COMMAND clang++ -o test -L ${CMAKE_SOURCE_DIR}/nvm_malloc -lnvmmalloc libalrt.so ${CMAKE_CURRENT_BINARY_DIR}/test.ll
 )
 add_dependencies(alnative alrt alc)
-
