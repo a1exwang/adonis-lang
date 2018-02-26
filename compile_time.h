@@ -50,12 +50,14 @@ namespace al {
   struct CompilerContext {
   public:
     CompilerContext(llvm::LLVMContext &c, llvm::Function *function, llvm::BasicBlock *bb)
-        :basicBlock(bb), function(function), builder(new llvm::IRBuilder<>(c)) { builder->SetInsertPoint(bb); }
+        :basicBlock(bb), function(function), builder(new llvm::IRBuilder<>(c))
+    { builder->SetInsertPoint(bb); }
     CompilerContext(const CompilerContext &cc)
         :basicBlock(cc.basicBlock), builder(cc.builder), function(cc.function) {}
     llvm::BasicBlock *basicBlock;
     llvm::Function *function;
     std::shared_ptr<llvm::IRBuilder<>> builder;
+    std::map<std::string, llvm::Value*> stackVariables;
   };
   class CompileTime {
   public:
@@ -80,7 +82,7 @@ namespace al {
     void pushContext(CompilerContext cc) {
       this->compilerContextStack.push_back(std::move(cc));
     }
-    CompilerContext getCompilerContext() const { return *(compilerContextStack.end()-1); }
+    CompilerContext &getCompilerContext() { return *(compilerContextStack.end()-1); }
     void popContext() { compilerContextStack.pop_back(); }
     void pushCurrentBlock(llvm::BasicBlock *b) { this->currentBlocks.push_back(b); }
     void popCurrentBlock() { this->currentBlocks.pop_back(); }
@@ -106,6 +108,12 @@ namespace al {
     }
     bool hasType(const std::string &name) const;
     ObjType getType(const std::string &name);
+    void createAssignment(
+        llvm::Type *elementType,
+        llvm::Value *lhsPtr,
+        llvm::Value *rhsVal,
+        llvm::Value *rhsPtr
+    );
 
   public:
     static llvm::Value *getTypeSize(llvm::IRBuilder<> &builder, llvm::Type *s);

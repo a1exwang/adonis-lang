@@ -304,3 +304,40 @@ void al::CompileTime::createCommitPersistentVar(llvm::Value *nvmPtr, llvm::Value
       }
   );
 }
+
+void al::CompileTime::createAssignment(
+    llvm::Type *elementType,
+    llvm::Value *lhsPtr,
+    llvm::Value *rhsVal,
+    llvm::Value *rhsPtr
+) {
+  auto builder = getCompilerContext().builder;
+  if (elementType->isIntegerTy(32)) {
+    builder->CreateStore(rhsVal, lhsPtr);
+  }
+  else if (elementType->isPointerTy()) {
+    builder->CreateStore(rhsVal, lhsPtr);
+  }
+  else if (elementType->isStructTy()) {
+    builder->CreateMemCpy(lhsPtr, rhsPtr,
+        CompileTime::getTypeSize(
+            *builder,
+            rhsPtr->getType()->getPointerElementType()
+        ),
+        8
+    );
+  }
+  else {
+    cerr << "type not supported" << endl;
+    elementType->dump();
+    abort();
+  }
+
+  // TODO support more types and do this only on nvm
+//      if (lhsPtr->getType()->getPointerAddressSpace() == PtrAddressSpace::NVM) {
+  createCommitPersistentVar(
+      lhsPtr,
+      getTypeSize(*builder, elementType)
+  );
+//      }
+}

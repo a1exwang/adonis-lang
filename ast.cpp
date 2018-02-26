@@ -68,9 +68,6 @@ namespace al {
       }
 
       Function *fn = nullptr;
-      /**
-       * Assignment Operator is a special operator
-       */
       if (this->name == "+") {
         if (args.size() != 2) { cerr << "'+' only accepts 2 args" << endl; abort(); }
         vr.value = ct.getCompilerContext().builder->CreateBinOp(
@@ -120,7 +117,13 @@ namespace al {
     }
 
     VisitResult ExpVarRef::visit(CompileTime &ct) {
-      if (ct.hasPersistentVar(this->name->getName())) {
+      auto &cont = ct.getCompilerContext();
+      if (cont.stackVariables.find(this->name->getName()) != cont.stackVariables.end()) {
+        auto var = cont.stackVariables[this->name->getName()];
+        vr.value = cont.builder->CreateLoad(var);
+        vr.gepResult = var;
+      }
+      else if (ct.hasPersistentVar(this->name->getName())) {
         auto type = ct.getPersistentVarType(this->name->getName());
         if (ct.getType(type).llvmType->isStructTy()) {
           vr.gepResult = ct.createGetMemNvmVar(this->name->getName());
@@ -304,47 +307,13 @@ namespace al {
 
       auto lhsPtr = exps[0]->getVR().gepResult;
       auto elementType = lhsPtr->getType()->getPointerElementType();
-
-      if (elementType->isIntegerTy(32)) {
-        ct.getCompilerContext().builder->CreateStore(
-            rhsVal,
-            lhsPtr
-        );
-        vr = rhs->getVR();
-      }
-      else if (elementType->isPointerTy()) {
-        ct.getCompilerContext().builder->CreateStore(
-            rhsVal,
-            lhsPtr
-        );
-        vr = rhs->getVR();
-      }
-      else if (elementType->isStructTy()) {
-        ct.getCompilerContext().builder->CreateMemCpy(
-            lhsPtr,
-            rhsPtr,
-            CompileTime::getTypeSize(
-                *ct.getCompilerContext().builder,
-                rhsPtr->getType()->getPointerElementType()
-            ),
-            8
-        );
-        vr.gepResult = rhsPtr;
-        vr.value = nullptr;
-      }
-      else {
-        cerr << "type not supported" << endl;
-        elementType->dump();
-        abort();
-      }
-
-      // TODO support more types and do this only on nvm
-//      if (lhsPtr->getType()->getPointerAddressSpace() == PtrAddressSpace::NVM) {
-        ct.createCommitPersistentVar(
-            lhsPtr,
-            ct.getTypeSize(*ct.getCompilerContext().builder, elementType)
-        );
-//      }
+      ct.createAssignment(
+          elementType,
+          lhsPtr,
+          rhsVal,
+          rhsPtr
+      );
+      vr = rhs->getVR();
     }
 
     void ExpGetAddr::postVisit(CompileTime &ct) {
@@ -363,6 +332,19 @@ namespace al {
         ptr->dump();
         abort();
       }
+    }
+
+    void ExpStackVarDef::postVisit(CompileTime &ct) {
+      auto vr = this->exp->getVR();
+      auto &cc = ct.getCompilerContext();
+      auto type = ct.getType(this->decl->getType()->getName()).llvmType;
+      cc.stackVariables[this->decl->getName()] = cc.builder->CreateAlloca(type);
+      ct.createAssignment(
+          type,
+          cc.stackVariables[this->decl->getName()],
+          vr.value,
+          vr.gepResult
+      );
     }
   }
 }

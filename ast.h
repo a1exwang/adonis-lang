@@ -200,6 +200,14 @@ namespace al {
     private:
       sp<Symbol> name;
     };
+    class ExpStackVarDef :public Exp {
+    public:
+      ExpStackVarDef(sp<VarDecl> decl, sp<Exp> exp) :decl(decl), exp(exp) { appendChild(exp); }
+      void postVisit(CompileTime &ct) override;
+    private:
+      sp<VarDecl> decl;
+      sp<Exp> exp;
+    };
     class ExpMemberAccess :public Exp {
     public:
       ExpMemberAccess(sp<Exp> obj, sp<Symbol> member) :obj(obj), member(std::move(member)) {

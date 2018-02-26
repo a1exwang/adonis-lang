@@ -39,9 +39,6 @@
     using namespace al;
 }
 
-%code {
-}
-
 %lex-param { al::Lexer &lexer }
 %parse-param { al::Lexer &lexer } { al::CompileTime &rt }
 %locations
@@ -86,6 +83,7 @@
 %type< std::shared_ptr<al::ast::ExpAssign> > exp_assign;
 %type< std::shared_ptr<al::ast::ExpCall> > exp_call;
 %type< std::shared_ptr<al::ast::ExpVarRef> > exp_var_ref;
+%type< std::shared_ptr<al::ast::ExpStackVarDef> > exp_var_def;
 %type< std::shared_ptr<al::ast::ExpMemberAccess> > exp_member;
 %type< std::shared_ptr<al::ast::Literal> > exp_lit;
 %type< std::shared_ptr<al::ast::ExpDeref> > exp_deref;
@@ -171,6 +169,7 @@ stmt: exp SEMICOLON { $$ = $1; }
 exp: exp_call { $$ = $1; }
     | exp_op { $$ = $1; }
     | exp_assign { $$ = $1; }
+    | exp_var_def { $$ = $1; }
     | exp_var_ref { $$ = $1; }
     | exp_member { $$ = $1; }
     | exp_lit { $$ = $1; }
@@ -190,6 +189,7 @@ exp_op: exp PLUS exp {
 exp_assign: exp EQ exp { $$ = std::make_shared<al::ast::ExpAssign>($1, $3); }
 
 exp_var_ref: SYMBOL_LIT { $$ = std::make_shared<al::ast::ExpVarRef>($1); }
+exp_var_def: var_decl EQ exp { $$ = std::make_shared<al::ast::ExpStackVarDef>($1, $3); }
 exp_member: exp DOT SYMBOL_LIT { $$ = std::make_shared<al::ast::ExpMemberAccess>($1, $3); }
 exp_lit: INT_LIT { $$ = $1; }
 exp_get_addr: AND exp { $$ = std::make_shared<al::ast::ExpGetAddr>($2); }
