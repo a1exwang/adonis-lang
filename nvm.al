@@ -18,6 +18,8 @@ extern {
   fn putsInt(val: int32);
   fn plus(i1: int32, i2: int32) int32;
   fn nvAllocInt32(pp: **int32);
+  fn getThreadName() *int8;
+  fn putsInt8Str(str: *int8);
 }
 
 fn AL__main() {
@@ -44,5 +46,7 @@ fn AL__main() {
   s0: int32 = 1;
   ps0: *int32 = &s0;
   putsInt(*ps0);
+
+  putsInt8Str(getThreadName());
 
 }

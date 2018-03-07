@@ -11,6 +11,7 @@
 #include <chrono>
 
 #include "../nvm_malloc/src/nvm_malloc.h"
+#include <thread>
 
 using namespace std;
 
@@ -20,16 +21,23 @@ using namespace std;
 #define DLLEXPORT
 #endif
 
-string getNvmVarNameById(int id) {
+string getNvmVarNameById(const string &threadName, int id) {
   string name;
   stringstream ss;
-  ss << "nvm_" << id;
+  ss << "nvm_" << threadName << "_" << id;
   ss >> name;
   return name;
 }
 
+std::map<std::thread::id, std::string> *threadNames;
+// thread, relptr, length
+std::map<std::tuple<string, void*, uint64_t>, string> nvmVarMap;
+
 extern "C" {
-std::map<std::pair<void*, uint64_t>, string> nvmVarMap;
+
+DLLEXPORT void alLibInit() {
+  threadNames = new std::map<std::thread::id, std::string>;
+}
 
 DLLEXPORT void howAreYou() {
   cout << "howareyou" << endl;
@@ -39,12 +47,30 @@ DLLEXPORT void nvmSetup() {
   nvm_initialize("nvm", 1);
 }
 
+DLLEXPORT void threadLocalSetup(const char *name) {
+  (*threadNames)[std::this_thread::get_id()] = name;
+  nvm_initialize("nvm", 1);
+}
+
+DLLEXPORT void threadLocalSetupMain() {
+  (*threadNames)[std::this_thread::get_id()] = "main";
+  nvm_initialize("nvm", 1);
+}
+
+DLLEXPORT const char *getThreadName() {
+  return (*threadNames)[std::this_thread::get_id()].c_str();
+}
+
 DLLEXPORT int32_t plus(int32_t a, int32_t b) {
   return a + b;
 }
 
 DLLEXPORT void putsInt(int32_t i) {
   cout << i << endl;
+}
+
+DLLEXPORT void putsInt8Str(const char *str) {
+  cout << str << endl;
 }
 
 DLLEXPORT void setIntNvmVar(int intId, int value) {
@@ -64,12 +90,12 @@ DLLEXPORT void setIntNvmVar(int intId, int value) {
 
 
 DLLEXPORT void *getNvmVar(int id, uint64_t size) {
-  auto name = getNvmVarNameById(id);
+  auto name = getNvmVarNameById(getThreadName(), id);
   void *p = nvm_get_id(name.c_str());
   if (p == nullptr) {
     p = nvm_reserve_id(name.c_str(), size);
   }
-  nvmVarMap[{p, size}] = name;
+  nvmVarMap[{getThreadName(), p, size}] = name;
 
   return p;
 }
@@ -78,7 +104,7 @@ DLLEXPORT int getIntNvmVar(int intId) {
   return *p;
 }
 DLLEXPORT void persistNvmVar(int id, uint64_t size) {
-  auto name = getNvmVarNameById(id);
+  auto name = getNvmVarNameById(getThreadName(), id);
   void *p = nvm_get_id(name.c_str());
   if (p == nullptr) {
     p = nvm_reserve_id(name.c_str(), size);
@@ -91,15 +117,19 @@ DLLEXPORT void persistNvmVar(int id, uint64_t size) {
 DLLEXPORT void persistNvmVarByAddr(char *ptr, uint64_t size) {
   nvm_persist(ptr, size);
 
-  if (nvmVarMap.find({ptr, size}) != nvmVarMap.end()) {
-    auto name = nvmVarMap[{ptr, size}];
+  if (nvmVarMap.find({getThreadName(), ptr, size}) != nvmVarMap.end()) {
+    auto name = nvmVarMap[{getThreadName(), ptr, size}];
     nvm_activate_id(name.c_str());
     return;
   }
   else {
     // TODO, optimize, get name with a sorted list and bin-search
     for (auto item : nvmVarMap) {
-      if (item.first.first <= ptr && ptr < (char*)item.first.first + item.first.second) {
+      string threadName;
+      void *relPtr;
+      uint64_t len;
+      tie(threadName, relPtr, len) = item.first;
+      if (threadName == getThreadName() && relPtr <= ptr && ptr < (char*)relPtr + len) {
         auto name = item.second;
 //        cerr << "inner nvm memory found: " << name << ", " << (void*)ptr << ", offset " << (void*)(ptr - (char*)item.first.first) << endl;
         nvm_activate_id(name.c_str());

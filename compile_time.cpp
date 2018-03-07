@@ -59,23 +59,33 @@ void al::CompileTime::createMainFunc() {
   IRBuilder<> builder(theContext);
   builder.SetInsertPoint(BB);
 
-  /* declares stdlib functions */
-  /* main function starts */
-//  auto ft = FunctionType::get(Type::getVoidTy(theContext), {});
-  this->howAreYou = Function::Create(
-      FunctionType::get(
-          Type::getVoidTy(theContext),
-          {},
-          false
+  builder.CreateCall(
+      Function::Create(
+          FunctionType::get(
+              llvm::Type::getVoidTy(theContext),
+              {},
+              false
+          ),
+          Function::LinkageTypes::ExternalLinkage, "alLibInit", getMainModule()
       ),
-      Function::LinkageTypes::ExternalLinkage, "howAreYou", getMainModule()
+      {}
   );
 
-//  builder.CreateCall(this->howAreYou, {});
+  builder.CreateCall(
+      Function::Create(
+          FunctionType::get(
+              llvm::Type::getVoidTy(theContext),
+              {},
+              false
+          ),
+          Function::LinkageTypes::ExternalLinkage, "threadLocalSetupMain", getMainModule()
+      ),
+      {}
+  );
 
   builder.CreateCall(Function::Create(
       FunctionType::get(
-          IntegerType::getVoidTy(theContext),
+          Type::getVoidTy(theContext),
           {},
           false
       ),
@@ -160,6 +170,8 @@ void al::CompileTime::registerBuiltinTypes() {
   std::vector<std::pair<std::string, llvm::Type*>> types = {
       {"int32", llvm::Type::getInt32Ty(theContext)},
       {"*int32", llvm::Type::getInt32PtrTy(theContext)},
+      {"int8", llvm::Type::getInt8Ty(theContext)},
+      {"*int8", llvm::Type::getInt8PtrTy(theContext)},
       {"void", llvm::Type::getVoidTy(theContext)},
   };
   for (auto &t1 : types) {
