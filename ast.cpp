@@ -56,6 +56,10 @@ namespace al {
 
     std::string Type::getOriginalTypeName() const { return symbol->getName(); }
 
+    void Type::markPersistent() {
+      bPersistent = true;
+    }
+
     ExpCall::ExpCall(const std::shared_ptr<Symbol> &name, std::vector<std::shared_ptr<Exp>> exps)
         :ExpCall(name->getName(), exps) {}
 
@@ -125,17 +129,11 @@ namespace al {
       }
       else if (ct.hasPersistentVar(this->name->getName())) {
         auto type = ct.getPersistentVarType(this->name->getName());
-        if (ct.getType(type).llvmType->isStructTy()) {
+        if (ct.getType(type).llvmType->isStructTy() ||
+            ct.getType(type).llvmType->isIntegerTy(32) ||
+            ct.getType(type).llvmType->isPointerTy()) {
           vr.gepResult = ct.createGetMemNvmVar(this->name->getName());
-        }
-        else if (ct.getType(type).llvmType->isIntegerTy(32)) {
-          vr.value = ct.createGetIntNvmVar(this->name->getName());
-          vr.gepResult = ct.createGetMemNvmVar(this->name->getName());
-        }
-        else if (ct.getType(type).llvmType->isPointerTy()) {
-          auto ptr = ct.createGetMemNvmVar(this->name->getName());
-          vr.value = ct.getCompilerContext().builder->CreateLoad(ptr);
-          vr.gepResult = ptr;
+          vr.value = ct.getCompilerContext().builder->CreateLoad(vr.gepResult);
         }
         else {
           cerr << "persistent var type not supported '" << this->name->getName() << "'" << endl;
@@ -165,6 +163,7 @@ namespace al {
     VisitResult PersistentBlock::visit(CompileTime &ct) {
       for (const auto &_varDecl : getChildren()[0]->getChildren()) {
         auto varDecl = std::dynamic_pointer_cast<VarDecl>(_varDecl);
+        varDecl->markPersistent();
         ct.registerPersistentVar(varDecl->getName(), varDecl->getType()->getName());
       }
       return vr;
@@ -179,14 +178,22 @@ namespace al {
 
     sp<Type> VarDecl::getType() { return std::dynamic_pointer_cast<Type>(getChildren()[0]); }
 
+    void VarDecl::markPersistent() {
+      this->getType()->markPersistent();
+    }
+
+    llvm::Type *VarDecl::getLlvmType() {
+      return nullptr;
+    }
+
     void ExpMemberAccess::postVisit(CompileTime &ct) {
       auto &builder = *ct.getCompilerContext().builder;
-      auto nvmPtr = obj->getVR().gepResult;
-      if (nvmPtr == nullptr) {
+      auto lhsPtr = obj->getVR().gepResult;
+      if (lhsPtr == nullptr) {
         cerr << "lhs is not a valid struct obj" << endl;
         abort();
       } else {
-        auto structType = nvmPtr->getType()->getPointerElementType();
+        auto structType = lhsPtr->getType()->getPointerElementType();
         // TODO
         ObjType structObjType = ct.getType(structType->getStructName());
         uint64_t idx = structObjType.elementNames.size();
@@ -201,7 +208,9 @@ namespace al {
           abort();
         }
         auto structPtr = builder.CreatePointerCast(
-            nvmPtr, llvm::PointerType::get(structType, 0)
+            lhsPtr, llvm::PointerType::get(
+                structType,
+                static_cast<llvm::PointerType*>(lhsPtr->getType())->getAddressSpace())
         );
         auto elementPtr = ct.getCompilerContext().builder->CreateGEP(
             structType,
@@ -213,7 +222,10 @@ namespace al {
         if (structObjType.llvmType->getStructElementType(idx)->isIntegerTy(32)) {
           vr.gepResult = builder.CreateBitCast(
               elementPtr,
-              llvm::Type::getInt32PtrTy(ct.getContext())
+              llvm::Type::getInt32PtrTy(
+                  ct.getContext(),
+                  static_cast<llvm::PointerType*>(elementPtr->getType())->getAddressSpace()
+              )
           );
           vr.value = builder.CreateLoad(vr.gepResult);
         }
@@ -246,8 +258,9 @@ namespace al {
 
     std::vector<llvm::Type *> FnDecl::getArgTypes(CompileTime &ct) const {
       std::vector<llvm::Type*> ts;
-      for (auto arg : args->getChildren()) {
-        auto tName = dynamic_cast<VarDecl*>(arg.get())->getType()->getName();
+      for (auto &arg : args->getChildren()) {
+        auto decl = dynamic_cast<VarDecl*>(arg.get());
+        auto tName = decl->getType()->getName();
         ts.push_back(ct.getType(tName).llvmType);
       }
       return ts;
@@ -345,6 +358,34 @@ namespace al {
           vr.value,
           vr.gepResult
       );
+    }
+
+    void ExpVolatileCast::postVisit(CompileTime &ct) {
+      auto exp = getChildren()[0];
+      auto val = exp->getVR().value;
+      if (!val->getType()->isPointerTy()) {
+        cerr << "Cannot use volatile cast operator on non-pointer type" << endl;
+        abort();
+      }
+
+      auto valPtrType = static_cast<llvm::PointerType*>(val->getType());
+      auto valVolatilePtrType = PointerType::get(valPtrType->getElementType(), PtrAddressSpace::Volatile);
+      auto gepResult = exp->getVR().gepResult;
+      auto builder = ct.getCompilerContext().builder;
+
+      if (!gepResult) {
+        vr.value = builder->CreatePointerCast(val, valVolatilePtrType);
+      }
+      else {
+        vr.value = builder->CreatePointerCast(val, valVolatilePtrType);
+        vr.gepResult = builder->CreatePointerCast(
+            gepResult,
+            PointerType::get(
+              valVolatilePtrType,
+              valPtrType->getAddressSpace()
+            )
+        );
+      }
     }
   }
 }

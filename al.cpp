@@ -18,10 +18,15 @@
 using namespace llvm;
 using namespace std;
 
-al::CompileTime *compile() {
+al::CompileTime *compile(int argc, char** argv) {
   al::CompileTime *rt = new al::CompileTime;
 
-  ifstream ifs("/home/alexwang/dev/proj/cpp/adonis-lang/nvm.al");
+  if (argc != 2) {
+    cerr << "wrong arguments" << endl;
+    abort();
+  }
+
+  ifstream ifs(argv[1]);
   std::string str((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
 
   al::Lexer lexer(str);

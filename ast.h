@@ -77,6 +77,8 @@ namespace al {
       VarDecl(const std::shared_ptr<Symbol> &symbol, const std::shared_ptr<Type> &type);
       std::string getName();
       sp<Type> getType();
+      llvm::Type *getLlvmType();
+      void markPersistent();
     };
     class VarDecls :public ASTNode {
     };
@@ -139,10 +141,13 @@ namespace al {
        */
       std::string getOriginalTypeName() const;
       bool isVoid();
+      void markPersistent();
+      bool isPersistent() const { return bPersistent; }
     private:
       sp<Symbol> symbol;
       sp<Type> originalType;
       int attrs;
+      bool bPersistent = false;
     };
 
     class Stmt :public ASTNode {
@@ -226,6 +231,11 @@ namespace al {
     class ExpDeref :public Exp {
     public:
       explicit ExpDeref(sp<Exp> exp) { appendChild(exp); }
+      void postVisit(CompileTime &ct) override;
+    };
+    class ExpVolatileCast :public Exp {
+    public:
+      explicit ExpVolatileCast(sp<Exp> exp) { appendChild(exp); }
       void postVisit(CompileTime &ct) override;
     };
 

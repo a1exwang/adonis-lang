@@ -71,7 +71,7 @@ void al::CompileTime::createMainFunc() {
       Function::LinkageTypes::ExternalLinkage, "howAreYou", getMainModule()
   );
 
-  builder.CreateCall(this->howAreYou, {});
+//  builder.CreateCall(this->howAreYou, {});
 
   builder.CreateCall(Function::Create(
       FunctionType::get(
@@ -178,8 +178,11 @@ llvm::Value *al::CompileTime::createGetMemNvmVar(const std::string &name) {
 
   int varId = name[name.size() - 1] - '0';
   auto t = this->getType(this->getPersistentVarType(name)).llvmType;
+  if (t->isPointerTy()) {
+    t = PointerType::get(t->getPointerElementType(), PtrAddressSpace::NVM);
+  }
 
-  return createGetMemNvmVar(PointerType::get(t, 0), varId);
+  return createGetMemNvmVar(PointerType::get(t, PtrAddressSpace::NVM), varId);
 }
 
 void al::CompileTime::createSetMemNvmVar(const std::string &name, llvm::Value *ptr) {
@@ -312,20 +315,14 @@ void al::CompileTime::createAssignment(
     llvm::Value *rhsPtr
 ) {
   auto builder = getCompilerContext().builder;
-  if (elementType->isIntegerTy(32)) {
+  if (elementType->isIntegerTy(32) ||
+      elementType->isPointerTy() ||
+      elementType->isStructTy()) {
+    auto a = static_cast<llvm::PointerType*>(lhsPtr->getType());
+    auto vPtr = llvm::PointerType::get(a->getElementType(), PtrAddressSpace::Volatile);
+    auto lhsNewPtr = builder->CreatePointerCast(lhsPtr, vPtr);
+
     builder->CreateStore(rhsVal, lhsPtr);
-  }
-  else if (elementType->isPointerTy()) {
-    builder->CreateStore(rhsVal, lhsPtr);
-  }
-  else if (elementType->isStructTy()) {
-    builder->CreateMemCpy(lhsPtr, rhsPtr,
-        CompileTime::getTypeSize(
-            *builder,
-            rhsPtr->getType()->getPointerElementType()
-        ),
-        8
-    );
   }
   else {
     cerr << "type not supported" << endl;

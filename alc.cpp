@@ -66,10 +66,10 @@ void handler(int sig) {
   exit(1);
 }
 
-int main() {
+int main(int argc, char **argv) {
 //  signal(SIGSEGV, handler);
 
-  auto ct = compile();
+  auto ct = compile(argc, argv);
   string s;
   raw_string_ostream s1(s);
 //  rt.getMainModule()->print(errs(), nullptr);

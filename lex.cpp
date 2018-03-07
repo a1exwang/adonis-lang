@@ -149,6 +149,12 @@ al::Parser::symbol_type al::Lexer::lex() {
           }
       },
       {
+          "volatile",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_VOLATILE(Parser::location_type());
+          }
+      },
+      {
           "persistent",
           [](const std::string &s) -> Parser::symbol_type {
             return Parser::make_PERSISTENT(Parser::location_type());

@@ -3,4 +3,4 @@
 #include <llvm/IR/Module.h>
 #include "compile_time.h"
 
-al::CompileTime *compile();
+al::CompileTime *compile(int argc, char **argv);

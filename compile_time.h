@@ -102,6 +102,7 @@ namespace al {
     void createCommitPersistentVar(llvm::Value *nvmPtr, llvm::Value *size);
     void registerPersistentVar(const std::string &name, const std::string &type);
     std::string getPersistentVarType(const std::string &name) { return this->persistentSymbolTable[name]; }
+    llvm::Type getPersistentVarLlvmType(const std::string &name);
 
     void registerType(const std::string &name, ObjType type) {
       this->typeTable[name] = type;

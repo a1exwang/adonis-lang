@@ -39,7 +39,7 @@ target_link_libraries(ali alrt ${llvm_compiler_libs} ${llvm_interpreter_libs} re
 add_custom_target(
         alnative
         COMMAND rm -f ${CMAKE_CURRENT_BINARY_DIR}/test.ll
-        COMMAND cd ${CMAKE_CURRENT_BINARY_DIR} && ${CMAKE_CURRENT_BINARY_DIR}/alc
+        COMMAND cd ${CMAKE_CURRENT_BINARY_DIR} && ${CMAKE_CURRENT_BINARY_DIR}/alc ${PROJECT_SOURCE_DIR}/nvm.al
         COMMAND test -f ${CMAKE_CURRENT_BINARY_DIR}/test.ll
         COMMAND clang++ -o test -L ${CMAKE_SOURCE_DIR}/nvm_malloc -lnvmmalloc libalrt.so ${CMAKE_CURRENT_BINARY_DIR}/test.ll
 )

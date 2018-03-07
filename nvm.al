@@ -37,11 +37,12 @@ fn AL__main() {
   (*pp5).i0 = 23332;
   putsInt((*pp5).i0);
 
-  nvAllocInt32(&pp6);
+  nvAllocInt32(volatile(&volatile(pp6)));
   *pp6 = *pp6 + 2;
   putsInt(*pp6);
 
   s0: int32 = 1;
   ps0: *int32 = &s0;
   putsInt(*ps0);
+
 }

@@ -67,10 +67,10 @@ void handler(int sig) {
   exit(1);
 }
 
-int main() {
+int main(int argc, char **argv) {
 //  signal(SIGSEGV, handler);
 
-  auto ct = compile();
+  auto ct = compile(argc, argv);
 
   LLVMLinkInMCJIT();
   InitializeNativeTarget();
