@@ -150,4 +150,12 @@ DLLEXPORT void nvAllocInt32(int **i32) {
   *i32 = (int*)nvm_abs(*i32);
 }
 
+DLLEXPORT int thread(void (*thread_fn)(int), int val) {
+  std::thread t([&thread_fn, val]() -> void {
+    thread_fn(val);
+  });
+  t.detach();
+  return 0;
+}
+
 }

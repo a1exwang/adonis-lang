@@ -171,3 +171,10 @@ fn main() {
   puts(y);
 }
 ```
+
+## TODOs
+
+- Annotation
+- Function Type
+- Thread
+

@@ -20,6 +20,11 @@ extern {
   fn nvAllocInt32(pp: **int32);
   fn getThreadName() *int8;
   fn putsInt8Str(str: *int8);
+  fn thread(fun: fn(val: int32));
+}
+
+fn thread_cb(val: int32) {
+  putsInt(val);
 }
 
 fn AL__main() {
@@ -49,4 +54,5 @@ fn AL__main() {
 
   putsInt8Str(getThreadName());
 
+  thread(thread_cb, 1);
 }

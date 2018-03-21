@@ -36,9 +36,6 @@ namespace al {
 //                << std::endl;
     }
 
-    Type::Type(std::shared_ptr<Symbol> symbol, int attrs) :symbol(std::move(symbol)), attrs(attrs) {
-    }
-
     std::string Type::getName() const {
       if (attrs == Type::None) {
         return symbol->getName();
@@ -58,6 +55,39 @@ namespace al {
 
     void Type::markPersistent() {
       bPersistent = true;
+    }
+
+    llvm::Type *Type::getLlvmType() {
+      return this->llvmType;
+    }
+
+    void Type::postVisit(CompileTime &ct) {
+      if (this->llvmType == nullptr) {
+        if (this->symbol) {
+          this->llvmType = ct.getType(this->symbol->getName())->getLlvmType();
+        } else if (this->attrs & Ptr) {
+          if (this->attrs & NVM) {
+            this->llvmType = llvm::PointerType::get(this->originalType->getLlvmType(), PtrAddressSpace::NVM);
+          } else {
+            this->llvmType = llvm::PointerType::get(this->originalType->getLlvmType(), PtrAddressSpace::Volatile);
+          }
+        } else if (this->attrs & Fn) {
+          std::vector<llvm::Type*> myArgs;
+          for (const auto &_arg : getArgs()->getChildren()) {
+            auto arg = dynamic_cast<VarDecl*>(_arg.get());
+            myArgs.push_back(arg->getType()->getLlvmType());
+          }
+
+          auto fnType = llvm::FunctionType::get(
+              // TODO: support for non void return types
+              llvm::Type::getVoidTy(ct.getContext()),
+              myArgs,
+              false
+          );
+          this->llvmType = llvm::PointerType::get(fnType, Volatile);
+
+        }
+      }
     }
 
     ExpCall::ExpCall(const std::shared_ptr<Symbol> &name, std::vector<std::shared_ptr<Exp>> exps)
@@ -90,20 +120,6 @@ namespace al {
       }
     }
 
-    void FnDef::preVisit(CompileTime &rt) {
-      auto fn = rt.getMainModule()->getFunction(this->getLinkageName());
-      if (fn == nullptr) {
-        fn = Function::Create(
-            FunctionType::get(llvm::Type::getVoidTy(rt.getContext()), {}),
-            Function::ExternalLinkage,
-            this->getLinkageName(),
-            rt.getMainModule()
-        );
-      }
-      CompilerContext cc(rt.getContext(), fn, BasicBlock::Create(rt.getContext(), "entry", fn));
-      rt.pushContext(cc);
-    }
-
     std::string FnDef::getName() const {
       return decl->getName();
     }
@@ -112,12 +128,34 @@ namespace al {
       return decl->getName();
     }
 
-    void FnDef::postVisit(CompileTime &ct) {
+    VisitResult FnDef::visit(CompileTime &ct) {
+      this->decl->visit(ct);
+      auto retType = this->decl->getRetType();
+      auto argTypes = this->decl->getArgTypes(ct);
+
+      auto fn = ct.getMainModule()->getFunction(this->getLinkageName());
+      if (fn == nullptr) {
+        fn = Function::Create(
+            FunctionType::get(retType.getLlvmType(), argTypes, false),
+            Function::ExternalLinkage,
+            this->getLinkageName(),
+            ct.getMainModule()
+        );
+      }
+      CompilerContext cc(ct.getContext(), fn, BasicBlock::Create(ct.getContext(), "entry", fn));
+      ct.pushContext(cc);
+
+      for (auto child : this->getChildren()) {
+        child->visit(ct);
+      }
+
       ct.getCompilerContext().builder->CreateRet(nullptr);
 //      if (!verifyFunction(*ct.getCompilerContext().function)) {
 //        cout << "failed to verifyFunction " << ct.getCompilerContext().function->getName().str() << endl;
 //      }
       ct.popContext();
+
+      return this->vr;
     }
 
     VisitResult ExpVarRef::visit(CompileTime &ct) {
@@ -129,9 +167,9 @@ namespace al {
       }
       else if (ct.hasPersistentVar(this->name->getName())) {
         auto type = ct.getPersistentVarType(this->name->getName());
-        if (ct.getType(type).llvmType->isStructTy() ||
-            ct.getType(type).llvmType->isIntegerTy(32) ||
-            ct.getType(type).llvmType->isPointerTy()) {
+        if (ct.getType(type)->getLlvmType()->isStructTy() ||
+            ct.getType(type)->getLlvmType()->isIntegerTy(32) ||
+            ct.getType(type)->getLlvmType()->isPointerTy()) {
           vr.gepResult = ct.createGetMemNvmVar(this->name->getName());
           vr.value = ct.getCompilerContext().builder->CreateLoad(vr.gepResult);
         }
@@ -140,10 +178,15 @@ namespace al {
         }
       }
       else {
-        vr.value = ct.getMainModule()->getGlobalVariable(this->name->getName());
-        if (vr.value == nullptr) {
-          cerr << "either global var nor persistent var found named '" << this->name->getName() << "'" << endl;
-          abort();
+        // check for function name
+        vr.value = ct.getMainModule()->getFunction(this->name->getName());
+        if (vr.value) {
+        } else {
+          vr.value = ct.getMainModule()->getGlobalVariable(this->name->getName());
+          if (vr.value == nullptr) {
+            cerr << "no global var, function or persistent var found named '" << this->name->getName() << "'" << endl;
+            abort();
+          }
         }
       }
       return vr;
@@ -195,15 +238,15 @@ namespace al {
       } else {
         auto structType = lhsPtr->getType()->getPointerElementType();
         // TODO
-        ObjType structObjType = ct.getType(structType->getStructName());
-        uint64_t idx = structObjType.elementNames.size();
-        for (uint64_t i = 0; i < structObjType.elementNames.size(); ++i) {
-          if (structObjType.elementNames[i] == member->getName()) {
+        auto structAstType = ct.getType(structType->getStructName());
+        uint64_t idx = structAstType->getMembers().size();
+        for (uint64_t i = 0; i < structAstType->getMembers().size(); ++i) {
+          if (structAstType->getMembers()[i] == member->getName()) {
             idx = i;
             break;
           }
         }
-        if (idx >= structObjType.elementNames.size()) {
+        if (idx >= structAstType->getMembers().size()) {
           cerr << "object member does not exist '" << member->getName() << "'" << endl;
           abort();
         }
@@ -219,7 +262,7 @@ namespace al {
              ConstantInt::get(llvm::Type::getInt32Ty(ct.getContext()), idx)}
         );
         // TODO Add more types
-        if (structObjType.llvmType->getStructElementType(idx)->isIntegerTy(32)) {
+        if (structAstType->getLlvmType()->getStructElementType(idx)->isIntegerTy(32)) {
           vr.gepResult = builder.CreateBitCast(
               elementPtr,
               llvm::Type::getInt32PtrTy(
@@ -230,29 +273,38 @@ namespace al {
           vr.value = builder.CreateLoad(vr.gepResult);
         }
         else {
-          cerr << "memberAccess element type not supported " << structObjType.elementNames[idx] << endl;
+          cerr << "memberAccess element type not supported " << structAstType->getMembers()[idx] << endl;
           abort();
         }
       }
     }
 
     void StructBlock::postVisit(CompileTime &ct) {
-      ObjType objType;
-      objType.name = this->name->getName();
+      auto name = this->name->getName();
+
       vector<llvm::Type*> elements;
 
+      vector<std::string> elementNames;
       for (const auto &_varDecl : this->varDecls->getChildren()) {
         auto varDecl = dynamic_pointer_cast<VarDecl>(_varDecl);
         auto elementObjType = ct.getType(varDecl->getType()->getName());
-        elements.push_back(elementObjType.llvmType);
-        objType.elementNames.push_back(varDecl->getName());
+        elements.push_back(elementObjType->getLlvmType());
+        elementNames.push_back(varDecl->getName());
       }
 
-      objType.llvmType = llvm::StructType::create(ct.getContext(), elements, objType.name);
-      ct.registerType(objType.name, objType);
+      auto llvmType = llvm::StructType::create(ct.getContext(), elements, name);
+      auto type = std::make_shared<ast::Type>(
+          std::make_shared<Symbol>(name.c_str()),
+          llvmType,
+          elementNames
+      );
+      ct.registerType(name, type);
     }
 
-    FnDecl::FnDecl(sp<Symbol> name, sp<Type> ret, sp<VarDecls> args) :name(move(name)), ret(ret), args(move(args)) { }
+    FnDecl::FnDecl(sp<Symbol> name, sp<Type> ret, sp<VarDecls> args) :name(move(name)), ret(ret), args(move(args)) {
+      appendChild(this->ret);
+      appendChild(this->args);
+    }
 
     std::string FnDecl::getName() const { return name->getName(); }
 
@@ -260,8 +312,7 @@ namespace al {
       std::vector<llvm::Type*> ts;
       for (auto &arg : args->getChildren()) {
         auto decl = dynamic_cast<VarDecl*>(arg.get());
-        auto tName = decl->getType()->getName();
-        ts.push_back(ct.getType(tName).llvmType);
+        ts.push_back(decl->getType()->getLlvmType());
       }
       return ts;
     }
@@ -275,7 +326,7 @@ namespace al {
       return ts;
     }
 
-    Type FnDecl::getRetType() const { return *ret; }
+    Type FnDecl::getRetType() { return *ret; }
 
     void ExternBlock::postVisit(CompileTime &ct) {
       for (const auto &child : getChildren()[0]->getChildren()) {
@@ -286,13 +337,13 @@ namespace al {
             cerr << "function already exists" << endl;
             abort();
           }
-          auto retType = ct.getType(fnDecl->getRetType().getName());
+          auto llvmTypeRet = fnDecl->getRetType().getLlvmType();
           vector<llvm::Type*> args;
           for (auto arg : fnDecl->getArgTypes(ct)) {
             args.push_back(arg);
           }
           fn = Function::Create(
-              FunctionType::get(retType.llvmType, args, false),
+              FunctionType::get(llvmTypeRet, args, false),
               Function::ExternalLinkage,
               fnDecl->getName(),
               ct.getMainModule()
@@ -350,7 +401,7 @@ namespace al {
     void ExpStackVarDef::postVisit(CompileTime &ct) {
       auto vr = this->exp->getVR();
       auto &cc = ct.getCompilerContext();
-      auto type = ct.getType(this->decl->getType()->getName()).llvmType;
+      auto type = ct.getType(this->decl->getType()->getName())->getLlvmType();
       cc.stackVariables[this->decl->getName()] = cc.builder->CreateAlloca(type);
       ct.createAssignment(
           type,

@@ -139,7 +139,7 @@ void al::CompileTime::createSetPersistentVar(const std::string &name, llvm::Valu
   int varId = name[name.size() - 1] - '0';
   if (this->hasType(pvType)) {
     auto objType = this->getType(pvType);
-    if (objType.llvmType->isIntegerTy(32)) {
+    if (objType->getLlvmType()->isIntegerTy(32)) {
       auto fn = getMainModule()->getOrInsertFunction(
           "setIntNvmVar",
           FunctionType::get(
@@ -148,13 +148,13 @@ void al::CompileTime::createSetPersistentVar(const std::string &name, llvm::Valu
       );
       getCompilerContext().builder->CreateCall(fn, {ConstantInt::get(Type::getInt32Ty(theContext), (uint64_t)varId), value});
     }
-    else if (objType.llvmType->isStructTy()) {
+    else if (objType->getLlvmType()->isStructTy()) {
       cerr << "unimplemented for struct type" << endl;
       abort();
     }
     else {
       cerr << "unsupported type" << endl;
-      objType.llvmType->dump();
+      objType->getLlvmType()->dump();
       abort();
     }
 
@@ -175,10 +175,15 @@ void al::CompileTime::registerBuiltinTypes() {
       {"void", llvm::Type::getVoidTy(theContext)},
   };
   for (auto &t1 : types) {
-    ObjType ty;
-    ty.name = t1.first;
-    ty.llvmType = t1.second;
-    this->registerType(ty.name, ty);
+    auto name = t1.first;
+
+    bool isPtr = t1.second->isPointerTy();
+    auto node = std::make_shared<al::ast::Type>(
+        std::make_shared<ast::Symbol>(name.c_str()),
+        isPtr ? ast::Type::Ptr : ast::Type::None,
+        t1.second
+    );
+    this->registerType(name, node);
   }
 }
 
@@ -189,7 +194,7 @@ llvm::Value *al::CompileTime::createGetMemNvmVar(const std::string &name) {
   }
 
   int varId = name[name.size() - 1] - '0';
-  auto t = this->getType(this->getPersistentVarType(name)).llvmType;
+  auto t = this->getType(this->getPersistentVarType(name))->getLlvmType();
   if (t->isPointerTy()) {
     t = PointerType::get(t->getPointerElementType(), PtrAddressSpace::NVM);
   }
@@ -204,7 +209,7 @@ void al::CompileTime::createSetMemNvmVar(const std::string &name, llvm::Value *p
   }
 
   int varId = name[name.size() - 1] - '0';
-  auto t = this->getType(this->getPersistentVarType(name)).llvmType;
+  auto t = this->getType(this->getPersistentVarType(name))->getLlvmType();
   auto sizeVal = this->getCompilerContext().builder->CreatePtrToInt(
       this->getCompilerContext().builder->CreateGEP(
           t,
@@ -274,15 +279,15 @@ llvm::Value *al::CompileTime::createGetMemNvmVar(llvm::PointerType *nvmPtrType, 
   );
 }
 
-al::ObjType al::CompileTime::getType(const std::string &name) {
-  if (!name.empty() && name[0] == '*') {
-    ObjType ret;
-    auto derefType = name.substr(1, name.size() - 1);
-    auto a = getType(derefType);
-    ret.llvmType = PointerType::get(a.llvmType, 0);
-    ret.name = name;
-    return ret;
-  }
+std::shared_ptr<al::ast::Type> al::CompileTime::getType(const std::string &name) {
+//  if (!name.empty() && name[0] == '*') {
+//    ObjType ret;
+//    auto derefType = name.substr(1, name.size() - 1);
+//    auto a = getType(derefType);
+//    ret.llvmType = PointerType::get(a.llvmType, 0);
+//    ret.name = name;
+//    return ret;
+//  }
   return this->typeTable[name];
 }
 

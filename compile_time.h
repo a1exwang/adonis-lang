@@ -33,14 +33,15 @@ namespace al {
   };
   namespace ast {
     class ASTNode;
+    class Type;
   }
 
-  struct ObjType {
-    std::string name;
-//    bool persistent;
-    llvm::Type *llvmType;
-    std::vector<std::string> elementNames;
-  };
+//  struct ObjType {
+//    std::string name;
+////    bool persistent;
+//    llvm::Type *llvmType;
+//    std::vector<std::string> elementNames;
+//  };
 
   enum PtrAddressSpace {
     Volatile = 0,
@@ -102,13 +103,11 @@ namespace al {
     void createCommitPersistentVar(llvm::Value *nvmPtr, llvm::Value *size);
     void registerPersistentVar(const std::string &name, const std::string &type);
     std::string getPersistentVarType(const std::string &name) { return this->persistentSymbolTable[name]; }
-    llvm::Type getPersistentVarLlvmType(const std::string &name);
-
-    void registerType(const std::string &name, ObjType type) {
+    void registerType(const std::string &name, std::shared_ptr<al::ast::Type> type) {
       this->typeTable[name] = type;
     }
     bool hasType(const std::string &name) const;
-    ObjType getType(const std::string &name);
+    std::shared_ptr<ast::Type> getType(const std::string &name);
     void createAssignment(
         llvm::Type *elementType,
         llvm::Value *lhsPtr,
@@ -133,6 +132,6 @@ namespace al {
 
     std::vector<CompilerContext> compilerContextStack;
     std::map<std::string, std::string> persistentSymbolTable;
-    std::map<std::string, ObjType> typeTable;
+    std::map<std::string, std::shared_ptr<ast::Type>> typeTable;
   };
 }

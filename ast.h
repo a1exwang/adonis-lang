@@ -89,7 +89,7 @@ namespace al {
           sp<Type> ret = std::make_shared<Type>(),
           sp<VarDecls> args = std::make_shared<VarDecls>());
       std::string getName() const;
-      Type getRetType() const;
+      Type getRetType();
       std::vector<llvm::Type*> getArgTypes(CompileTime &ct) const;
       std::vector<std::string> getArgNames(CompileTime &ct) const;
     private:
@@ -122,16 +122,31 @@ namespace al {
     };
     class Type :public ASTNode {
     public:
-      enum { None = 0, Ptr = 1, Ref = 2, Persistent = 4 };
+      enum { None = 0, Ptr = 1, Ref = 2, Persistent = 4, Fn = 8 };
 
       explicit Type(
           std::shared_ptr<Symbol> symbol = std::make_shared<Symbol>("void"),
-          int attrs = None
-      );
+          int attrs = None,
+          llvm::Type *llvmType = nullptr
+      ) :symbol(std::move(symbol)), attrs(attrs), llvmType(llvmType) {}
+
       explicit Type(
-          std::shared_ptr<Type> originalType,
+          sp<Type> originalType,
           int attrs = None
-      ) :originalType(originalType), attrs(attrs) { }
+      ) :originalType(std::move(originalType)), attrs(attrs) { appendChild(originalType); }
+
+      explicit Type(
+          sp<al::ast::VarDecls> args,
+          int attrs = Fn
+      ) :fnTypeArgs(std::move(args)), attrs(attrs) {
+        appendChild(fnTypeArgs);
+      }
+
+      explicit Type(
+          sp<Symbol> symbol,
+          llvm::Type *llvmType,
+          std::vector<std::string> memberNames
+      ) :symbol(std::move(symbol)), llvmType(llvmType), memberNames(std::move(memberNames)) { }
       /**
        * e.g. int32, *int32, *User
        */
@@ -143,11 +158,19 @@ namespace al {
       bool isVoid();
       void markPersistent();
       bool isPersistent() const { return bPersistent; }
+      llvm::Type *getLlvmType();
+      sp<VarDecls> getArgs() { return fnTypeArgs; }
+      std::vector<std::string> getMembers() { return memberNames; }
+
+      void postVisit(CompileTime &ct) override;
     private:
       sp<Symbol> symbol;
       sp<Type> originalType;
       int attrs;
       bool bPersistent = false;
+      sp<VarDecls> fnTypeArgs;
+      llvm::Type *llvmType;
+      std::vector<std::string> memberNames;
     };
 
     class Stmt :public ASTNode {
@@ -168,8 +191,7 @@ namespace al {
         appendChild(stmtBlock);
       }
 
-      void preVisit(CompileTime &rt) override;
-      void postVisit(CompileTime &) override;
+      VisitResult visit(CompileTime &rt) override;
       std::string getName() const;
       std::string getLinkageName() const;
     private:
