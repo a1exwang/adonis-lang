@@ -105,6 +105,12 @@ al::Parser::symbol_type al::Lexer::lex() {
           }
       },
       {
+          "\\<",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_LT(Parser::location_type());
+          }
+      },
+      {
           "\\*",
           [](const std::string &s) -> Parser::symbol_type {
             return Parser::make_STAR(Parser::location_type());
@@ -140,6 +146,12 @@ al::Parser::symbol_type al::Lexer::lex() {
           "fn",
           [](const std::string &s) -> Parser::symbol_type {
             return Parser::make_FN(Parser::location_type());
+          }
+      },
+      {
+          "for",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_FOR(Parser::location_type());
           }
       },
       {

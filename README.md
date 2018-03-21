@@ -175,6 +175,3 @@ fn main() {
 ## TODOs
 
 - Annotation
-- Function Type
-- Thread
-

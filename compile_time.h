@@ -58,7 +58,7 @@ namespace al {
     llvm::BasicBlock *basicBlock;
     llvm::Function *function;
     std::shared_ptr<llvm::IRBuilder<>> builder;
-    std::map<std::string, llvm::Value*> stackVariables;
+//    std::map<std::string, llvm::Value*> stackVariables;
   };
   class CompileTime {
   public:
@@ -114,6 +114,9 @@ namespace al {
         llvm::Value *rhsVal,
         llvm::Value *rhsPtr
     );
+    llvm::Value* getFunctionStackVariable(const std::string &functionName, const std::string &varName);
+    bool hasFunctionStackVariable(const std::string &functionName, const std::string &varName);
+    void setFunctionStackVariable(const std::string &functionName, const std::string &varName, llvm::Value *val);
 
   public:
     static llvm::Value *getTypeSize(llvm::IRBuilder<> &builder, llvm::Type *s);
@@ -133,5 +136,7 @@ namespace al {
     std::vector<CompilerContext> compilerContextStack;
     std::map<std::string, std::string> persistentSymbolTable;
     std::map<std::string, std::shared_ptr<ast::Type>> typeTable;
+
+    std::map<std::string, std::map<std::string, llvm::Value*>> functionStackVariables;
   };
 }

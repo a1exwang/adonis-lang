@@ -355,3 +355,23 @@ void al::CompileTime::createAssignment(
   );
 //      }
 }
+
+llvm::Value *al::CompileTime::getFunctionStackVariable(const std::string &functionName, const std::string &varName) {
+  return this->functionStackVariables[functionName][varName];
+}
+
+bool al::CompileTime::hasFunctionStackVariable(const std::string &functionName, const std::string &varName) {
+  if (this->functionStackVariables.find(functionName) == this->functionStackVariables.end()) {
+    return false;
+  }
+  return this->functionStackVariables[functionName].find(varName) != this->functionStackVariables[functionName].end();
+}
+
+void al::CompileTime::setFunctionStackVariable(const std::string &functionName, const std::string &varName,
+                                               llvm::Value *val) {
+  if (this->functionStackVariables.find(functionName) == this->functionStackVariables.end()) {
+    this->functionStackVariables[functionName] = std::map<std::string, llvm::Value*>();
+  }
+  this->functionStackVariables[functionName][varName] = val;
+}
+

@@ -276,6 +276,23 @@ namespace al {
         return exps;
       }
     };
+    class ExpFor :public Exp {
+    public:
+      ExpFor(sp<Exp> initExp, sp<Exp> judgementExp, sp<Exp> tailExp, sp<StmtBlock> body)
+      :initExp(initExp), judgementExp(judgementExp), tailExp(tailExp), body(body) {
+        appendChild(initExp);
+        appendChild(judgementExp);
+        appendChild(tailExp);
+        appendChild(body);
+      }
+
+      VisitResult visit(CompileTime &ct) override;
+    private:
+      sp<Exp> initExp;
+      sp<Exp> judgementExp;
+      sp<Exp> tailExp;
+      sp<StmtBlock> body;
+    };
 
     class Symbol :public Exp {
     public:

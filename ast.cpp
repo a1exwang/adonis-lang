@@ -110,6 +110,15 @@ namespace al {
             args[1]
         );
       }
+      else if (this->name == "<") {
+        if (args.size() != 2) { cerr << "'<' only accepts 2 args" << endl; abort(); }
+        vr.value = ct.getCompilerContext().builder->CreateZExt(
+            ct.getCompilerContext().builder->CreateICmp(llvm::CmpInst::Predicate::ICMP_SLT,
+                                                        args[0],
+                                                        args[1]),
+            llvm::IntegerType::getInt32Ty(ct.getContext())
+        );
+      }
       else {
         fn = ct.getMainModule()->getFunction(this->name);
         if (fn == nullptr) {
@@ -160,8 +169,8 @@ namespace al {
 
     VisitResult ExpVarRef::visit(CompileTime &ct) {
       auto &cont = ct.getCompilerContext();
-      if (cont.stackVariables.find(this->name->getName()) != cont.stackVariables.end()) {
-        auto var = cont.stackVariables[this->name->getName()];
+      if (ct.hasFunctionStackVariable(ct.getCompilerContext().function->getName(), this->name->getName())) {
+        auto var = ct.getFunctionStackVariable(ct.getCompilerContext().function->getName(), this->name->getName());
         vr.value = cont.builder->CreateLoad(var);
         vr.gepResult = var;
       }
@@ -402,10 +411,15 @@ namespace al {
       auto vr = this->exp->getVR();
       auto &cc = ct.getCompilerContext();
       auto type = ct.getType(this->decl->getType()->getName())->getLlvmType();
-      cc.stackVariables[this->decl->getName()] = cc.builder->CreateAlloca(type);
+      auto var = cc.builder->CreateAlloca(type);
+      ct.setFunctionStackVariable(
+          ct.getCompilerContext().function->getName(),
+          this->decl->getName(),
+          var
+      );
       ct.createAssignment(
           type,
-          cc.stackVariables[this->decl->getName()],
+          var,
           vr.value,
           vr.gepResult
       );
@@ -437,6 +451,49 @@ namespace al {
             )
         );
       }
+    }
+
+    VisitResult ExpFor::visit(CompileTime &ct) {
+      // init expression
+      this->initExp->visit(ct);
+
+      auto function = ct.getCompilerContext().function;
+
+      auto judgementBlock = BasicBlock::Create(ct.getContext(), "", function);
+
+      ct.getCompilerContext().builder->CreateBr(judgementBlock);
+
+      CompilerContext judgementCt(ct.getContext(), function, judgementBlock);
+      ct.popContext();
+      ct.pushContext(judgementCt);
+
+      auto bodyBlock = BasicBlock::Create(ct.getContext(), "", function);
+      auto nextBlock = BasicBlock::Create(ct.getContext(), "", function);
+
+      auto judgeResult = this->judgementExp->visit(ct);
+      auto isFalse = ct.getCompilerContext().builder->CreateICmp(
+          llvm::CmpInst::Predicate::ICMP_EQ,
+          judgeResult.value,
+          llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(ct.getContext()), 0, true)
+      );
+      ct.getCompilerContext().builder->CreateCondBr(
+          isFalse,
+          nextBlock,
+          bodyBlock
+      );
+
+      CompilerContext bodyCt(ct.getContext(), function, bodyBlock);
+      ct.popContext();
+      ct.pushContext(bodyCt);
+      this->body->visit(ct);
+      this->tailExp->visit(ct);
+      ct.getCompilerContext().builder->CreateBr(judgementBlock);
+
+      CompilerContext nextCt(ct.getContext(), function, nextBlock);
+      ct.popContext();
+      ct.pushContext(nextCt);
+
+      return this->vr;
     }
   }
 }

@@ -45,12 +45,13 @@
 %define parse.trace
 %define parse.error verbose
 
-%token FN STRUCT PERSISTENT EXTERN VOLATILE
+%token FN FOR STRUCT PERSISTENT EXTERN VOLATILE
 %token SEMICOLON ";";
 %token COLON COMMA BANG
 %token QUOTE "'";
 %right RIGHT_ARROW
 %right EQ
+%left LT
 %left AND
 %left PLUS
 %left STAR
@@ -89,6 +90,7 @@
 %type< std::shared_ptr<al::ast::ExpDeref> > exp_deref;
 %type< std::shared_ptr<al::ast::ExpGetAddr> > exp_get_addr;
 %type< std::shared_ptr<al::ast::ExpVolatileCast> > exp_volatile_cast;
+%type< std::shared_ptr<al::ast::ExpFor> > exp_for;
 
 %type< std::shared_ptr<al::ast::Type> > type;
 
@@ -178,6 +180,7 @@ exp: exp_call { $$ = $1; }
     | exp_deref { $$ = $1; }
     | LEFTPAR exp RIGHTPAR { $$ = $2; }
     | exp_volatile_cast { $$ = $1; }
+    | exp_for { $$ = $1; }
 
 exp_call: SYMBOL_LIT LEFTPAR exps RIGHTPAR {
       $$ = std::make_shared<al::ast::ExpCall>($1, $3->toVector());
@@ -188,6 +191,9 @@ exp_call: SYMBOL_LIT LEFTPAR exps RIGHTPAR {
 exp_op: exp PLUS exp {
       $$ = std::make_shared<al::ast::ExpCall>("+", std::vector<std::shared_ptr<al::ast::Exp>>({$1, $3}));
       }
+    | exp LT exp {
+      $$ = std::make_shared<al::ast::ExpCall>("<", std::vector<std::shared_ptr<al::ast::Exp>>({$1, $3}));
+      }
 exp_assign: exp EQ exp { $$ = std::make_shared<al::ast::ExpAssign>($1, $3); }
 
 exp_var_ref: SYMBOL_LIT { $$ = std::make_shared<al::ast::ExpVarRef>($1); }
@@ -197,6 +203,10 @@ exp_lit: INT_LIT { $$ = $1; }
 exp_get_addr: AND exp { $$ = std::make_shared<al::ast::ExpGetAddr>($2); }
 exp_deref: STAR exp { $$ = std::make_shared<al::ast::ExpDeref>($2); }
 exp_volatile_cast: VOLATILE LEFTPAR exp RIGHTPAR { $$ = std::make_shared<al::ast::ExpVolatileCast>($3); }
+
+exp_for: FOR exp SEMICOLON exp SEMICOLON exp stmt_block {
+      $$ = std::make_shared<al::ast::ExpFor>($2, $4, $6, $7);
+    }
 
 exps: exp { $$ = std::make_shared<al::ast::ExpList>(); $$->prependChild($1); }
     | exp COMMA exps { $$ = $3; $$->prependChild($1); }
