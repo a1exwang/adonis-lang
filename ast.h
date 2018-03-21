@@ -133,12 +133,22 @@ namespace al {
       explicit Type(
           sp<Type> originalType,
           int attrs = None
-      ) :originalType(std::move(originalType)), attrs(attrs) { appendChild(originalType); }
+      ) :originalType(originalType), attrs(attrs) {
+        if (originalType == nullptr) {
+          std::cerr << "originalType == nullptr" << std::endl;
+          abort();
+        }
+        appendChild(originalType);
+      }
 
       explicit Type(
           sp<al::ast::VarDecls> args,
           int attrs = Fn
       ) :fnTypeArgs(std::move(args)), attrs(attrs) {
+        if (fnTypeArgs== nullptr) {
+          std::cerr << "fnTypeArgs== nullptr" << std::endl;
+          abort();
+        }
         appendChild(fnTypeArgs);
       }
 

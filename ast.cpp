@@ -66,7 +66,7 @@ namespace al {
         if (this->symbol) {
           this->llvmType = ct.getType(this->symbol->getName())->getLlvmType();
         } else if (this->attrs & Ptr) {
-          if (this->attrs & NVM) {
+          if (this->attrs & Persistent) {
             this->llvmType = llvm::PointerType::get(this->originalType->getLlvmType(), PtrAddressSpace::NVM);
           } else {
             this->llvmType = llvm::PointerType::get(this->originalType->getLlvmType(), PtrAddressSpace::Volatile);
@@ -141,6 +141,7 @@ namespace al {
       this->decl->visit(ct);
       auto retType = this->decl->getRetType();
       auto argTypes = this->decl->getArgTypes(ct);
+      auto argNames = this->decl->getArgNames(ct);
 
       auto fn = ct.getMainModule()->getFunction(this->getLinkageName());
       if (fn == nullptr) {
@@ -151,8 +152,18 @@ namespace al {
             ct.getMainModule()
         );
       }
+
       CompilerContext cc(ct.getContext(), fn, BasicBlock::Create(ct.getContext(), "entry", fn));
       ct.pushContext(cc);
+
+
+      int i = 0;
+      for (auto &arg : fn->args()) {
+        auto varNewLocation = ct.getCompilerContext().builder->CreateAlloca(argTypes[i]);
+        ct.getCompilerContext().builder->CreateStore(&arg, varNewLocation);
+        ct.setFunctionStackVariable(fn->getName(), argNames[i], varNewLocation);
+        i++;
+      }
 
       for (auto child : this->getChildren()) {
         child->visit(ct);

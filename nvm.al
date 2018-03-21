@@ -1,3 +1,12 @@
+extern {
+  fn nvAllocInt32(pp: **int32);
+  fn putsInt(val: int32);
+  fn plus(i1: int32, i2: int32) int32;
+  fn getThreadName() *int8;
+  fn putsInt8Str(str: *int8);
+  fn thread(fun: fn(val: int32), i: int32);
+}
+
 struct User {
   i0: int32
   i1: int32
@@ -14,17 +23,9 @@ persistent {
   pp6: *int32
 }
 
-extern {
-  fn putsInt(val: int32);
-  fn plus(i1: int32, i2: int32) int32;
-  fn nvAllocInt32(pp: **int32);
-  fn getThreadName() *int8;
-  fn putsInt8Str(str: *int8);
-  fn thread(fun: fn(val: int32));
-}
 
 fn thread_cb(val: int32) {
-  putsInt(val);
+  putsInt(123);
 }
 
 fn AL__main() {

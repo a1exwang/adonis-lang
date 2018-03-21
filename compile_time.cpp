@@ -280,14 +280,13 @@ llvm::Value *al::CompileTime::createGetMemNvmVar(llvm::PointerType *nvmPtrType, 
 }
 
 std::shared_ptr<al::ast::Type> al::CompileTime::getType(const std::string &name) {
-//  if (!name.empty() && name[0] == '*') {
-//    ObjType ret;
-//    auto derefType = name.substr(1, name.size() - 1);
-//    auto a = getType(derefType);
-//    ret.llvmType = PointerType::get(a.llvmType, 0);
-//    ret.name = name;
-//    return ret;
-//  }
+  if (!name.empty() && name[0] == '*') {
+    auto derefType = name.substr(1, name.size() - 1);
+    auto a = getType(derefType);
+    auto llvmType = PointerType::get(a->getLlvmType(), al::PtrAddressSpace::Volatile);
+    auto newType = std::make_shared<al::ast::Type>(std::make_shared<ast::Symbol>(name), ast::Type::Ptr, llvmType);
+    this->typeTable[name] = newType;
+  }
   return this->typeTable[name];
 }
 
@@ -348,12 +347,12 @@ void al::CompileTime::createAssignment(
   }
 
   // TODO support more types and do this only on nvm
-//      if (lhsPtr->getType()->getPointerAddressSpace() == PtrAddressSpace::NVM) {
-  createCommitPersistentVar(
-      lhsPtr,
-      getTypeSize(*builder, elementType)
-  );
-//      }
+  if (lhsPtr->getType()->getPointerAddressSpace() == PtrAddressSpace::NVM) {
+    createCommitPersistentVar(
+        lhsPtr,
+        getTypeSize(*builder, elementType)
+    );
+  }
 }
 
 llvm::Value *al::CompileTime::getFunctionStackVariable(const std::string &functionName, const std::string &varName) {
