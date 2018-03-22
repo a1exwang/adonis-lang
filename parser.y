@@ -47,7 +47,7 @@
 
 %token FN FOR STRUCT PERSISTENT EXTERN VOLATILE
 %token SEMICOLON ";";
-%token COLON COMMA BANG
+%token COLON COMMA BANG AT
 %token QUOTE "'";
 %right RIGHT_ARROW
 %right EQ
@@ -93,6 +93,7 @@
 %type< std::shared_ptr<al::ast::ExpFor> > exp_for;
 
 %type< std::shared_ptr<al::ast::Type> > type;
+%type< std::shared_ptr<al::ast::Annotation> > annotation;
 
 %type< std::shared_ptr<al::ast::StructBlock> > struct_block;
 %type< std::shared_ptr<al::ast::ExternBlock> > extern_block;
@@ -207,6 +208,9 @@ exp_volatile_cast: VOLATILE LEFTPAR exp RIGHTPAR { $$ = std::make_shared<al::ast
 exp_for: FOR exp SEMICOLON exp SEMICOLON exp stmt_block {
       $$ = std::make_shared<al::ast::ExpFor>($2, $4, $6, $7);
     }
+    | annotation FOR exp SEMICOLON exp SEMICOLON exp stmt_block {
+      $$ = std::make_shared<al::ast::ExpFor>($3, $5, $7, $8, $1);
+    }
 
 exps: exp { $$ = std::make_shared<al::ast::ExpList>(); $$->prependChild($1); }
     | exp COMMA exps { $$ = $3; $$->prependChild($1); }
@@ -227,6 +231,9 @@ type: SYMBOL_LIT { $$ = std::make_shared<al::ast::Type>($1); }
         $$ = std::make_shared<al::ast::Type>(std::make_shared<al::ast::VarDecls>(), al::ast::Type::Fn);
       }
 
+annotation: AT SYMBOL_LIT LEFTPAR exps RIGHTPAR {
+        $$ = std::make_shared<al::ast::Annotation>($2, $4);
+      }
 
 %%
 void al::Parser::error(const location &loc , const std::string &message) {

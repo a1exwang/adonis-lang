@@ -506,6 +506,17 @@ namespace al {
 
       return this->vr;
     }
+
+    ExpFor::ExpFor(sp<Exp> initExp, sp<Exp> judgementExp, sp<Exp> tailExp, sp<StmtBlock> body,
+                   sp<al::ast::Annotation> annotation)
+        :initExp(initExp), judgementExp(judgementExp), tailExp(tailExp), body(body), annotation(annotation) {
+      if (annotation)
+        appendChild(annotation);
+      appendChild(initExp);
+      appendChild(judgementExp);
+      appendChild(tailExp);
+      appendChild(body);
+    }
   }
 }
 

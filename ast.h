@@ -69,6 +69,7 @@ namespace al {
 
     class Symbol;
     class Type;
+    class Annotation;
     class Decl :public ASTNode {
     };
     class Decls :public ASTNode { };
@@ -288,13 +289,7 @@ namespace al {
     };
     class ExpFor :public Exp {
     public:
-      ExpFor(sp<Exp> initExp, sp<Exp> judgementExp, sp<Exp> tailExp, sp<StmtBlock> body)
-      :initExp(initExp), judgementExp(judgementExp), tailExp(tailExp), body(body) {
-        appendChild(initExp);
-        appendChild(judgementExp);
-        appendChild(tailExp);
-        appendChild(body);
-      }
+      ExpFor(sp<Exp> initExp, sp<Exp> judgementExp, sp<Exp> tailExp, sp<StmtBlock> body, sp<Annotation> annotation = nullptr);
 
       VisitResult visit(CompileTime &ct) override;
     private:
@@ -302,6 +297,7 @@ namespace al {
       sp<Exp> judgementExp;
       sp<Exp> tailExp;
       sp<StmtBlock> body;
+      sp<Annotation> annotation;
     };
 
     class Symbol :public Exp {
@@ -343,6 +339,12 @@ namespace al {
       VisitResult visit(CompileTime &ct) override;
     private:
       std::string s;
+    };
+    class Annotation :public ASTNode {
+    public:
+      explicit Annotation(sp<Symbol> name, sp<ExpList> exps) :name(name) { appendChild(exps); }
+    private:
+      sp<Symbol> name;
     };
   }
 }

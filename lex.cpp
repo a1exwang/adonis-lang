@@ -93,6 +93,12 @@ al::Parser::symbol_type al::Lexer::lex() {
           }
       },
       {
+          "\\@",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_AT(Parser::location_type());
+          }
+      },
+      {
           "\\!",
           [](const std::string &s) -> Parser::symbol_type {
             return Parser::make_BANG(Parser::location_type());
