@@ -101,6 +101,15 @@ void al::CompileTime::createMainFunc() {
       Function::LinkageTypes::ExternalLinkage, "AL__main", getMainModule()
   );
   builder.CreateCall(userFn, {});
+  auto alMainEnd = Function::Create(
+      FunctionType::get(
+          Type::getVoidTy(theContext),
+          {},
+          false
+      ),
+      Function::LinkageTypes::ExternalLinkage, "AL__main_end", getMainModule()
+  );
+  builder.CreateCall(alMainEnd, {});
   builder.CreateRet(ConstantInt::get(Type::getInt32Ty(theContext), 0));
 }
 

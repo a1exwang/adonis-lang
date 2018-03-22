@@ -88,6 +88,12 @@ DLLEXPORT void setIntNvmVar(int intId, int value) {
   nvm_activate_id(name.c_str());
 }
 
+DLLEXPORT void AL__main_end() {
+  cout << "bye" << endl;
+  // FIXME: maybe we should not exit by ourself. Because we may leak libcpp resources
+  exit(0);
+}
+
 
 DLLEXPORT void *getNvmVar(int id, uint64_t size) {
   auto name = getNvmVarNameById(getThreadName(), id);
@@ -167,6 +173,7 @@ DLLEXPORT int toc(int *ticVal) {
   auto end = chrono::high_resolution_clock::now();
   auto start = (decltype(end)*)ticVal;
   auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - *start).count();
+  delete start;
   return (int)ns;
 }
 
