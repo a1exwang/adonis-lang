@@ -343,8 +343,27 @@ namespace al {
     class Annotation :public ASTNode {
     public:
       explicit Annotation(sp<Symbol> name, sp<ExpList> exps) :name(name) { appendChild(exps); }
+      std::string getName() const {
+        return this->name->getName();
+      }
+      bool isBatchFor(const std::string &nvmVarName) {
+        auto args = this->getChildren()[0]->getChildren();
+        if (this->getName() != "batch")
+          return false;
+
+        auto varNameArg = dynamic_cast<ExpVarRef*>(args[0].get());
+        return varNameArg && varNameArg->getName() == nvmVarName;
+      }
+      void setOnBatchSizeVal(llvm::Value *val) {
+        this->onBatchSizeVal = val;
+      }
+      llvm::Value *getOnBatchSizeVal() {
+        return this->onBatchSizeVal;
+      }
+      int getBatchCount();
     private:
       sp<Symbol> name;
+      llvm::Value *onBatchSizeVal;
     };
   }
 }

@@ -120,7 +120,11 @@ DLLEXPORT void persistNvmVar(int id, uint64_t size) {
   nvm_activate_id(name.c_str());
 }
 
-DLLEXPORT void persistNvmVarByAddr(char *ptr, uint64_t size) {
+DLLEXPORT void persistNvmVarByAddr(char *ptr, uint64_t size, int ok) {
+  if (!ok) {
+    return;
+  }
+
   nvm_persist(ptr, size);
 
   if (nvmVarMap.find({getThreadName(), ptr, size}) != nvmVarMap.end()) {

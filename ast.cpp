@@ -391,12 +391,21 @@ namespace al {
 
       auto lhsPtr = exps[0]->getVR().gepResult;
       auto elementType = lhsPtr->getType()->getPointerElementType();
+
+      // If lhs is a symbol, we support a batch operation
+      llvm::Value *onBatchSizeVal = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(ct.getContext()), 1);
+      if (ct.getCompilerContext().annotation) {
+        onBatchSizeVal = ct.getCompilerContext().annotation->getOnBatchSizeVal();
+      }
+
       ct.createAssignment(
           elementType,
           lhsPtr,
           rhsVal,
-          rhsPtr
+          rhsPtr,
+          onBatchSizeVal
       );
+
       vr = rhs->getVR();
     }
 
@@ -465,57 +474,162 @@ namespace al {
     }
 
     VisitResult ExpFor::visit(CompileTime &ct) {
-      // init expression
-      this->initExp->visit(ct);
+      auto outerAnnotation = ct.getCompilerContext().annotation;
+      if (this->annotation && this->annotation->getName() == "batch") {
 
-      auto function = ct.getCompilerContext().function;
+        auto batchCount = this->annotation->getBatchCount();
+        // init expression
+        this->initExp->visit(ct);
+        auto counterVal = ct.getCompilerContext().builder->CreateAlloca(
+            llvm::IntegerType::getInt32Ty(ct.getContext())
+        );
+        ct.getCompilerContext().builder->CreateStore(
+            llvm::ConstantInt::get(llvm::IntegerType::get(ct.getContext(), 32), 0),
+            counterVal
+        );
 
-      auto judgementBlock = BasicBlock::Create(ct.getContext(), "", function);
+        auto function = ct.getCompilerContext().function;
 
-      ct.getCompilerContext().builder->CreateBr(judgementBlock);
+        auto judgementBlock = BasicBlock::Create(ct.getContext(), "", function);
 
-      CompilerContext judgementCt(ct.getContext(), function, judgementBlock);
-      ct.popContext();
-      ct.pushContext(judgementCt);
+        ct.getCompilerContext().builder->CreateBr(judgementBlock);
 
-      auto bodyBlock = BasicBlock::Create(ct.getContext(), "", function);
-      auto nextBlock = BasicBlock::Create(ct.getContext(), "", function);
+        CompilerContext judgementCt(ct.getContext(), function, judgementBlock, this->annotation);
+        ct.popContext();
+        ct.pushContext(judgementCt);
 
-      auto judgeResult = this->judgementExp->visit(ct);
-      auto isFalse = ct.getCompilerContext().builder->CreateICmp(
-          llvm::CmpInst::Predicate::ICMP_EQ,
-          judgeResult.value,
-          llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(ct.getContext()), 0, true)
-      );
-      ct.getCompilerContext().builder->CreateCondBr(
-          isFalse,
-          nextBlock,
-          bodyBlock
-      );
+        auto bodyBlock = BasicBlock::Create(ct.getContext(), "", function);
+        auto nextBlock = BasicBlock::Create(ct.getContext(), "", function);
 
-      CompilerContext bodyCt(ct.getContext(), function, bodyBlock);
-      ct.popContext();
-      ct.pushContext(bodyCt);
-      this->body->visit(ct);
-      this->tailExp->visit(ct);
-      ct.getCompilerContext().builder->CreateBr(judgementBlock);
+        auto judgeResult = this->judgementExp->visit(ct);
+        auto isFalse = ct.getCompilerContext().builder->CreateICmp(
+            llvm::CmpInst::Predicate::ICMP_EQ,
+            judgeResult.value,
+            llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(ct.getContext()), 0, true)
+        );
+        ct.getCompilerContext().builder->CreateCondBr(
+            isFalse,
+            nextBlock,
+            bodyBlock
+        );
 
-      CompilerContext nextCt(ct.getContext(), function, nextBlock);
-      ct.popContext();
-      ct.pushContext(nextCt);
+        CompilerContext bodyCt(ct.getContext(), function, bodyBlock, this->annotation);
+        ct.popContext();
+        ct.pushContext(bodyCt);
 
-      return this->vr;
+        // Only persist when i % batchSize == 0
+        auto builder = ct.getCompilerContext().builder;
+
+        // counter++
+        builder->CreateStore(
+            builder->CreateAdd(
+                builder->CreateLoad(counterVal),
+                llvm::ConstantInt::get(llvm::IntegerType::get(ct.getContext(), 32), 1)
+            ),
+            counterVal
+        );
+        // onBatchSize = counter % batchSize == 0
+        auto onBatchSizeVal = builder->CreateICmp(
+            llvm::CmpInst::Predicate::ICMP_EQ,
+            builder->CreateSRem(
+                builder->CreateLoad(counterVal),
+                llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(ct.getContext()), batchCount)
+            ),
+            llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(ct.getContext()), 0)
+        );
+        // TODO: Persist the NVM variable after the loop
+        // Before that, we need to maintain the NVM variable list in the loop
+        annotation->setOnBatchSizeVal(builder->CreateZExt(onBatchSizeVal, llvm::IntegerType::getInt32Ty(ct.getContext())));
+        // Persist ends
+
+        this->body->visit(ct);
+        this->tailExp->visit(ct);
+
+        ct.getCompilerContext().builder->CreateBr(judgementBlock);
+
+        CompilerContext nextCt(ct.getContext(), function, nextBlock, this->annotation);
+        ct.popContext();
+        ct.pushContext(nextCt);
+
+        return this->vr;
+
+      } else {
+        // init expression
+        this->initExp->visit(ct);
+
+        auto function = ct.getCompilerContext().function;
+
+        auto judgementBlock = BasicBlock::Create(ct.getContext(), "", function);
+
+        ct.getCompilerContext().builder->CreateBr(judgementBlock);
+
+        CompilerContext judgementCt(ct.getContext(), function, judgementBlock, outerAnnotation);
+        ct.popContext();
+        ct.pushContext(judgementCt);
+
+        auto bodyBlock = BasicBlock::Create(ct.getContext(), "", function);
+        auto nextBlock = BasicBlock::Create(ct.getContext(), "", function);
+
+        auto judgeResult = this->judgementExp->visit(ct);
+        auto isFalse = ct.getCompilerContext().builder->CreateICmp(
+            llvm::CmpInst::Predicate::ICMP_EQ,
+            judgeResult.value,
+            llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(ct.getContext()), 0, true)
+        );
+        ct.getCompilerContext().builder->CreateCondBr(
+            isFalse,
+            nextBlock,
+            bodyBlock
+        );
+
+        CompilerContext bodyCt(ct.getContext(), function, bodyBlock, outerAnnotation);
+        ct.popContext();
+        ct.pushContext(bodyCt);
+        this->body->visit(ct);
+        this->tailExp->visit(ct);
+        ct.getCompilerContext().builder->CreateBr(judgementBlock);
+
+        CompilerContext nextCt(ct.getContext(), function, nextBlock, outerAnnotation);
+        ct.popContext();
+        ct.pushContext(nextCt);
+
+        return this->vr;
+      }
     }
 
-    ExpFor::ExpFor(sp<Exp> initExp, sp<Exp> judgementExp, sp<Exp> tailExp, sp<StmtBlock> body,
-                   sp<al::ast::Annotation> annotation)
-        :initExp(initExp), judgementExp(judgementExp), tailExp(tailExp), body(body), annotation(annotation) {
-      if (annotation)
+    ExpFor::ExpFor(
+        sp<Exp> initExp, sp<Exp> judgementExp, sp<Exp> tailExp, sp<StmtBlock> body,
+        sp<al::ast::Annotation> annotation)
+        :initExp(initExp), judgementExp(judgementExp), tailExp(tailExp), body(body), annotation(annotation)
+    {
+      if (annotation) {
+        appendChild(initExp);
+        appendChild(judgementExp);
+        appendChild(tailExp);
+        appendChild(body);
         appendChild(annotation);
-      appendChild(initExp);
-      appendChild(judgementExp);
-      appendChild(tailExp);
-      appendChild(body);
+      }
+    }
+
+    int Annotation::getBatchCount() {
+//      if (!this->isBatchFor(nvmVarName))
+//        return -1;
+
+      auto args = this->getChildren()[0]->getChildren();
+      if (this->getName() != "batch")
+        return false;
+
+      auto batchCountParam = dynamic_cast<IntLiteral*>(args[1].get());
+      if (batchCountParam == nullptr) {
+        cerr << "The parameters of @batch annotation must be symbol and int literal" << endl;
+        abort();
+      }
+
+      int ret = -1;
+      stringstream ss;
+      ss << batchCountParam->getValue();
+      ss >> ret;
+      return ret;
     }
   }
 }

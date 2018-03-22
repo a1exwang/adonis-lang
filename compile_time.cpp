@@ -309,7 +309,7 @@ bool al::CompileTime::hasType(const std::string &name) const {
   }
 }
 
-void al::CompileTime::createCommitPersistentVar(llvm::Value *nvmPtr, llvm::Value *size) {
+void al::CompileTime::createCommitPersistentVarIfOk(llvm::Value *nvmPtr, llvm::Value *size, llvm::Value *ok) {
   if (!nvmPtr->getType()->isPointerTy() || !size->getType()->isIntegerTy()) {
     cerr << "nvmPtr must be a ptr and size must be an integer" << endl;
     abort();
@@ -319,7 +319,8 @@ void al::CompileTime::createCommitPersistentVar(llvm::Value *nvmPtr, llvm::Value
       FunctionType::get(
           Type::getVoidTy(theContext), {
               Type::getInt32PtrTy(theContext),
-              Type::getInt64Ty(theContext)
+              Type::getInt64Ty(theContext),
+              Type::getInt32Ty(theContext)
           },
           false
       )
@@ -328,7 +329,8 @@ void al::CompileTime::createCommitPersistentVar(llvm::Value *nvmPtr, llvm::Value
   getCompilerContext().builder->CreateCall(
       fn, {
           getCompilerContext().builder->CreatePointerCast(nvmPtr, Type::getInt32PtrTy(theContext)),
-          size
+          size,
+          ok,
       }
   );
 }
@@ -337,7 +339,8 @@ void al::CompileTime::createAssignment(
     llvm::Type *elementType,
     llvm::Value *lhsPtr,
     llvm::Value *rhsVal,
-    llvm::Value *rhsPtr
+    llvm::Value *rhsPtr,
+    llvm::Value *persistNvm
 ) {
   auto builder = getCompilerContext().builder;
   if (elementType->isIntegerTy(32) ||
@@ -355,11 +358,11 @@ void al::CompileTime::createAssignment(
     abort();
   }
 
-  // TODO support more types and do this only on nvm
-  if (lhsPtr->getType()->getPointerAddressSpace() == PtrAddressSpace::NVM) {
-    createCommitPersistentVar(
+  if (persistNvm && lhsPtr->getType()->getPointerAddressSpace() == PtrAddressSpace::NVM) {
+    createCommitPersistentVarIfOk(
         lhsPtr,
-        getTypeSize(*builder, elementType)
+        getTypeSize(*builder, elementType),
+        persistNvm
     );
   }
 }

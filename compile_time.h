@@ -34,6 +34,7 @@ namespace al {
   namespace ast {
     class ASTNode;
     class Type;
+    class Annotation;
   }
 
 //  struct ObjType {
@@ -50,14 +51,15 @@ namespace al {
 
   struct CompilerContext {
   public:
-    CompilerContext(llvm::LLVMContext &c, llvm::Function *function, llvm::BasicBlock *bb)
-        :basicBlock(bb), function(function), builder(new llvm::IRBuilder<>(c))
+    CompilerContext(llvm::LLVMContext &c, llvm::Function *function, llvm::BasicBlock *bb, std::shared_ptr<ast::Annotation> annotation = nullptr)
+        :basicBlock(bb), function(function), builder(new llvm::IRBuilder<>(c)), annotation(annotation)
     { builder->SetInsertPoint(bb); }
     CompilerContext(const CompilerContext &cc)
-        :basicBlock(cc.basicBlock), builder(cc.builder), function(cc.function) {}
+        :basicBlock(cc.basicBlock), builder(cc.builder), function(cc.function), annotation(cc.annotation) {}
     llvm::BasicBlock *basicBlock;
     llvm::Function *function;
     std::shared_ptr<llvm::IRBuilder<>> builder;
+    std::shared_ptr<ast::Annotation> annotation;
 //    std::map<std::string, llvm::Value*> stackVariables;
   };
   class CompileTime {
@@ -100,7 +102,7 @@ namespace al {
       return this->persistentSymbolTable.find(name) != persistentSymbolTable.end();
     }
     void createSetPersistentVar(const std::string &name, llvm::Value*);
-    void createCommitPersistentVar(llvm::Value *nvmPtr, llvm::Value *size);
+    void createCommitPersistentVarIfOk(llvm::Value *nvmPtr, llvm::Value *size, llvm::Value *ok);
     void registerPersistentVar(const std::string &name, const std::string &type);
     std::string getPersistentVarType(const std::string &name) { return this->persistentSymbolTable[name]; }
     void registerType(const std::string &name, std::shared_ptr<al::ast::Type> type) {
@@ -112,7 +114,8 @@ namespace al {
         llvm::Type *elementType,
         llvm::Value *lhsPtr,
         llvm::Value *rhsVal,
-        llvm::Value *rhsPtr
+        llvm::Value *rhsPtr,
+        llvm::Value *persistNvm = nullptr
     );
     llvm::Value* getFunctionStackVariable(const std::string &functionName, const std::string &varName);
     bool hasFunctionStackVariable(const std::string &functionName, const std::string &varName);
