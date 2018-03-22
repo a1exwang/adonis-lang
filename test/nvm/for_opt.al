@@ -1,12 +1,9 @@
 extern {
   fn putsInt(val: int32);
-  fn tic() *int32;
-  fn toc(ticVal: *int32) int32;
 }
 
 fn AL__main() {
 
-  t1: *int32 = tic();
   a: int32 = 233;
   a = a + 1;
   putsInt(a);
@@ -20,6 +17,4 @@ fn AL__main() {
     sum = sum + i;
   };
   putsInt(sum);
-
-  putsInt(toc(t1));
 }

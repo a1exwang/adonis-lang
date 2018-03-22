@@ -158,4 +158,17 @@ DLLEXPORT int thread(void (*thread_fn)(int), int val) {
   return 0;
 }
 
+DLLEXPORT int *tic() {
+  auto tp = std::chrono::high_resolution_clock::now();
+  auto ptp = new decltype(tp)(tp);
+  return (int*)ptp;
+}
+DLLEXPORT int toc(int *ticVal) {
+  auto end = chrono::high_resolution_clock::now();
+  auto start = (decltype(end)*)ticVal;
+  auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - *start).count();
+  return (int)ns;
+}
+
+
 }
