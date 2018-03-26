@@ -36,19 +36,6 @@ namespace al {
 //                << std::endl;
     }
 
-    std::string Type::getName() const {
-      if (attrs == Type::None) {
-        return symbol->getName();
-      }
-      else if (attrs & Type::Ptr) {
-        return "*" + originalType->getName();
-      }
-      else {
-        cerr << "Wrong type attr" << endl;
-        abort();
-      }
-    }
-
     bool Type::isVoid() { return symbol->getName() == "void"; }
 
     std::string Type::getOriginalTypeName() const { return symbol->getName(); }
@@ -57,25 +44,107 @@ namespace al {
       bPersistent = true;
     }
 
-    llvm::Type *Type::getLlvmType() {
+    llvm::Type *Type::getLlvmType() const {
       return this->llvmType;
     }
 
     void Type::postVisit(CompileTime &ct) {
+      parseLlvmType(ct);
+    }
+
+    bool Type::same(const Type &rhs) const {
+      if (this->attrs == Type::Fn) {
+        if (!this->originalType->same(*rhs.originalType)) {
+          return false;
+        }
+        for (int i = 0; i < this->fnTypeArgs->getChildren().size(); ++i) {
+          auto larg = dynamic_cast<VarDecl*>(this->fnTypeArgs->getChildren()[i].get());
+          auto rarg = dynamic_cast<VarDecl*>(rhs.fnTypeArgs->getChildren()[i].get());
+          if (!larg->getType()->same(*rarg->getType())) {
+            return false;
+          }
+        }
+        return true;
+      } else if (this->attrs == Type::None) {
+        return this->symbol->getName() == rhs.symbol->getName();
+      } else if (this->attrs & Type::Ptr || this->attrs & Type::Persistent){
+        return (this->attrs == rhs.attrs) && (this->originalType->same(*rhs.originalType));
+      } else {
+        cerr << "unreachable code" << endl;
+        abort();
+      }
+    }
+
+    std::string Type::toString() const {
+      if ((this->attrs & Type::Ptr) && (this->attrs & Type::Persistent)) {
+        cerr << "Type::attrs has Ptr and Persistent set" << endl;
+        abort();
+      }
+
+      if (this->attrs & Type::None) {
+        return this->symbol->getName();
+      } else if (this->attrs & Type::Ptr) {
+        return "*" + this->originalType->toString();
+      } else if (this->attrs & Type::Persistent) {
+        return "persistent " + this->originalType->toString();
+      } else if (this->attrs & Type::Fn) {
+        auto c = this->fnTypeArgs->getChildren();
+        string ret = "fn (";
+        for (int i = 0; i < c.size(); ++i) {
+          auto arg = dynamic_cast<VarDecl*>(c[i].get());
+          ret += arg->getType()->toString();
+          if (i != c.size() - 1) {
+            ret += ", ";
+          }
+        }
+        return ret + ") " + this->originalType->toString();
+      } else {
+        cerr << "Type::attrs has unknown values" << endl;
+        abort();
+      }
+    }
+
+    Type::Type(sp<al::ast::VarDecls> args,
+               sp<al::ast::Type> retType,
+               int attrs)
+        :fnTypeArgs(args), attrs(attrs), originalType(retType) {
+      if (fnTypeArgs== nullptr) {
+        std::cerr << "fnTypeArgs== nullptr" << std::endl;
+        abort();
+      }
+      appendChild(fnTypeArgs);
+      appendChild(retType);
+    }
+
+    Type::Type(sp<Symbol> symbol, llvm::Type *llvmType, std::vector<std::string> memberNames)
+        :symbol(std::move(symbol)), llvmType(llvmType), memberNames(std::move(memberNames)) {
+    }
+
+    void Type::parseLlvmType(CompileTime &ct) {
       if (this->llvmType == nullptr) {
         if (this->symbol) {
           this->llvmType = ct.getType(this->symbol->getName())->getLlvmType();
         } else if (this->attrs & Ptr) {
-          if (this->attrs & Persistent) {
-            this->llvmType = llvm::PointerType::get(this->originalType->getLlvmType(), PtrAddressSpace::NVM);
+          this->originalType->parseLlvmType(ct);
+          this->llvmType = llvm::PointerType::get(this->originalType->getLlvmType(), PtrAddressSpace::Volatile);
+        } else if (this->attrs & Persistent) {
+          this->originalType->parseLlvmType(ct);
+          if (this->originalType->attrs & Ptr) {
+            this->llvmType = llvm::PointerType::get(
+                ((llvm::PointerType*)this->originalType->getLlvmType())->getPointerElementType(),
+                PtrAddressSpace::NVM
+            );
           } else {
-            this->llvmType = llvm::PointerType::get(this->originalType->getLlvmType(), PtrAddressSpace::Volatile);
+            this->bPersistent = true;
+            this->llvmType = this->originalType->getLlvmType();
           }
         } else if (this->attrs & Fn) {
           std::vector<llvm::Type*> myArgs;
           for (const auto &_arg : getArgs()->getChildren()) {
             auto arg = dynamic_cast<VarDecl*>(_arg.get());
-            myArgs.push_back(arg->getType()->getLlvmType());
+            auto t = arg->getType();
+            t->parseLlvmType(ct);
+            myArgs.push_back(t->getLlvmType());
           }
 
           auto fnType = llvm::FunctionType::get(
@@ -85,7 +154,6 @@ namespace al {
               false
           );
           this->llvmType = llvm::PointerType::get(fnType, Volatile);
-
         }
       }
     }
@@ -185,11 +253,11 @@ namespace al {
         vr.value = cont.builder->CreateLoad(var);
         vr.gepResult = var;
       }
-      else if (ct.hasPersistentVar(this->name->getName())) {
-        auto type = ct.getPersistentVarType(this->name->getName());
-        if (ct.getType(type)->getLlvmType()->isStructTy() ||
-            ct.getType(type)->getLlvmType()->isIntegerTy(32) ||
-            ct.getType(type)->getLlvmType()->isPointerTy()) {
+      else if (ct.hasSymbol(this->name->getName())) {
+        auto type = ct.getSymbolType(this->name->getName());
+        if (type->getLlvmType()->isStructTy() ||
+            type->getLlvmType()->isIntegerTy(32) ||
+            type->getLlvmType()->isPointerTy()) {
           vr.gepResult = ct.createGetMemNvmVar(this->name->getName());
           vr.value = ct.getCompilerContext().builder->CreateLoad(vr.gepResult);
         }
@@ -223,13 +291,12 @@ namespace al {
       return vr;
     }
 
-    VisitResult PersistentBlock::visit(CompileTime &ct) {
+    void PersistentBlock::postVisit(CompileTime &ct) {
       for (const auto &_varDecl : getChildren()[0]->getChildren()) {
         auto varDecl = std::dynamic_pointer_cast<VarDecl>(_varDecl);
         varDecl->markPersistent();
-        ct.registerPersistentVar(varDecl->getName(), varDecl->getType()->getName());
+        ct.registerSymbol(varDecl->getName(), varDecl->getType());
       }
-      return vr;
     }
 
     VarDecl::VarDecl(const std::shared_ptr<Symbol> &symbol, const std::shared_ptr<Type> &type) {
@@ -307,8 +374,8 @@ namespace al {
       vector<std::string> elementNames;
       for (const auto &_varDecl : this->varDecls->getChildren()) {
         auto varDecl = dynamic_pointer_cast<VarDecl>(_varDecl);
-        auto elementObjType = ct.getType(varDecl->getType()->getName());
-        elements.push_back(elementObjType->getLlvmType());
+        auto elementObjType = varDecl->getType()->getLlvmType();
+        elements.push_back(elementObjType);
         elementNames.push_back(varDecl->getName());
       }
 
@@ -430,7 +497,7 @@ namespace al {
     void ExpStackVarDef::postVisit(CompileTime &ct) {
       auto vr = this->exp->getVR();
       auto &cc = ct.getCompilerContext();
-      auto type = ct.getType(this->decl->getType()->getName())->getLlvmType();
+      auto type = this->decl->getType()->getLlvmType();
       auto var = cc.builder->CreateAlloca(type);
       ct.setFunctionStackVariable(
           ct.getCompilerContext().function->getName(),

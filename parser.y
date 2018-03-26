@@ -225,10 +225,10 @@ var_decl: SYMBOL_LIT COLON type {
 
 type: SYMBOL_LIT { $$ = std::make_shared<al::ast::Type>($1); }
     | STAR type { $$ = std::make_shared<al::ast::Type>($2, al::ast::Type::Ptr); }
-    | PERSISTENT STAR type { $$ = std::make_shared<al::ast::Type>($3, al::ast::Type::Ptr); $$->markPersistent(); }
-    | FN LEFTPAR fn_args RIGHTPAR { $$ = std::make_shared<al::ast::Type>($3, al::ast::Type::Fn); }
+    | PERSISTENT type { $$ = std::make_shared<al::ast::Type>($2, al::ast::Type::Persistent); }
+    | FN LEFTPAR fn_args RIGHTPAR { $$ = std::make_shared<al::ast::Type>($3); }
     | FN LEFTPAR RIGHTPAR {
-        $$ = std::make_shared<al::ast::Type>(std::make_shared<al::ast::VarDecls>(), al::ast::Type::Fn);
+        $$ = std::make_shared<al::ast::Type>(std::make_shared<al::ast::VarDecls>());
       }
 
 annotation: AT SYMBOL_LIT LEFTPAR exps RIGHTPAR {

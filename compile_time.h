@@ -98,18 +98,19 @@ namespace al {
     llvm::Value *createGetMemNvmVar(const std::string &name);
     llvm::Value *createGetMemNvmVar(llvm::PointerType *nvmPtrType, int id);
     void createSetMemNvmVar(const std::string &name, llvm::Value *ptr);
-    bool hasPersistentVar(const std::string &name) const {
-      return this->persistentSymbolTable.find(name) != persistentSymbolTable.end();
-    }
     void createSetPersistentVar(const std::string &name, llvm::Value*);
     void createCommitPersistentVarIfOk(llvm::Value *nvmPtr, llvm::Value *size, llvm::Value *ok);
-    void registerPersistentVar(const std::string &name, const std::string &type);
-    std::string getPersistentVarType(const std::string &name) { return this->persistentSymbolTable[name]; }
-    void registerType(const std::string &name, std::shared_ptr<al::ast::Type> type) {
-      this->typeTable[name] = type;
-    }
+    void registerType(const std::string &name, std::shared_ptr<al::ast::Type> type);
     bool hasType(const std::string &name) const;
     std::shared_ptr<ast::Type> getType(const std::string &name);
+
+    void registerSymbol(const std::string &name, std::shared_ptr<al::ast::Type> type);
+    bool hasSymbol(const std::string &name) const {
+      return this->globalSymbolTable.find(name) != this->globalSymbolTable.end();
+    }
+    std::shared_ptr<const ast::Type> getSymbolType(const std::string &name) {
+      return this->globalSymbolTable[name];
+    }
     void createAssignment(
         llvm::Type *elementType,
         llvm::Value *lhsPtr,
@@ -137,8 +138,8 @@ namespace al {
     int strCounter;
 
     std::vector<CompilerContext> compilerContextStack;
-    std::map<std::string, std::string> persistentSymbolTable;
     std::map<std::string, std::shared_ptr<ast::Type>> typeTable;
+    std::map<std::string, std::shared_ptr<ast::Type>> globalSymbolTable;
 
     std::map<std::string, std::map<std::string, llvm::Value*>> functionStackVariables;
   };

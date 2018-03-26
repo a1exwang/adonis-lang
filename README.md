@@ -174,4 +174,7 @@ fn main() {
 
 ## TODOs
 
-- Annotation
+- leveldb-like delayed persistence
+- function scope nvm variables, delayed or canceled persistence
+- persistent gc
+

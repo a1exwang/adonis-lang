@@ -103,7 +103,7 @@ namespace al {
       explicit PersistentBlock(const std::shared_ptr<VarDecls> &varDecls) {
         appendChild(varDecls);
       }
-      VisitResult visit(CompileTime &ct) override;
+      void postVisit(CompileTime &ct) override;
     };
     class StructBlock :public Block {
     public:
@@ -123,45 +123,59 @@ namespace al {
     };
     class Type :public ASTNode {
     public:
-      enum { None = 0, Ptr = 1, Ref = 2, Persistent = 4, Fn = 8 };
+      enum { None = 1, Ptr = 2, Persistent = 4, Fn = 8 };
 
+      /**
+       * Create a symbol ref pre-defined type
+       * @param symbol
+       * @param attrs
+       * @param llvmType
+       */
       explicit Type(
           std::shared_ptr<Symbol> symbol = std::make_shared<Symbol>("void"),
           int attrs = None,
           llvm::Type *llvmType = nullptr
       ) :symbol(std::move(symbol)), attrs(attrs), llvmType(llvmType) {}
 
+      /**
+       * Create a pointer or persistent type
+       * @param originalType
+       * @param attrs
+       */
       explicit Type(
-          sp<Type> originalType,
+          const sp<Type> &originalType,
           int attrs = None
       ) :originalType(originalType), attrs(attrs) {
         if (originalType == nullptr) {
           std::cerr << "originalType == nullptr" << std::endl;
           abort();
         }
-        appendChild(originalType);
+        appendChild(this->originalType);
       }
 
+      /**
+       * Create a function type
+       * @param args
+       * @param retType
+       * @param attrs
+       */
       explicit Type(
           sp<al::ast::VarDecls> args,
+          sp<al::ast::Type> retType = std::make_shared<ast::Type>(std::make_shared<ast::Symbol>("void")),
           int attrs = Fn
-      ) :fnTypeArgs(std::move(args)), attrs(attrs) {
-        if (fnTypeArgs== nullptr) {
-          std::cerr << "fnTypeArgs== nullptr" << std::endl;
-          abort();
-        }
-        appendChild(fnTypeArgs);
-      }
+      );
 
+      /**
+       * Create a struct type
+       * @param symbol
+       * @param llvmType
+       * @param memberNames
+       */
       explicit Type(
           sp<Symbol> symbol,
           llvm::Type *llvmType,
           std::vector<std::string> memberNames
-      ) :symbol(std::move(symbol)), llvmType(llvmType), memberNames(std::move(memberNames)) { }
-      /**
-       * e.g. int32, *int32, *User
-       */
-      std::string getName() const;
+      );
       /**
        * For *int32 returns int32
        */
@@ -169,9 +183,12 @@ namespace al {
       bool isVoid();
       void markPersistent();
       bool isPersistent() const { return bPersistent; }
-      llvm::Type *getLlvmType();
+      bool same(const Type &rhs) const;
+      llvm::Type *getLlvmType() const;
       sp<VarDecls> getArgs() { return fnTypeArgs; }
       std::vector<std::string> getMembers() { return memberNames; }
+      std::string toString() const;
+      void parseLlvmType(CompileTime &ct);
 
       void postVisit(CompileTime &ct) override;
     private:
@@ -180,7 +197,7 @@ namespace al {
       int attrs;
       bool bPersistent = false;
       sp<VarDecls> fnTypeArgs;
-      llvm::Type *llvmType;
+      llvm::Type *llvmType{};
       std::vector<std::string> memberNames;
     };
 
@@ -240,7 +257,7 @@ namespace al {
     };
     class ExpStackVarDef :public Exp {
     public:
-      ExpStackVarDef(sp<VarDecl> decl, sp<Exp> exp) :decl(decl), exp(exp) { appendChild(exp); }
+      ExpStackVarDef(sp<VarDecl> decl, sp<Exp> exp) :decl(decl), exp(exp) { appendChild(decl); appendChild(exp); }
       void postVisit(CompileTime &ct) override;
     private:
       sp<VarDecl> decl;

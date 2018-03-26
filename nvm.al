@@ -1,5 +1,5 @@
 extern {
-  fn nvAllocInt32(pp: **int32);
+  fn nvAllocInt32(pp: * persistent* persistent int32);
   fn putsInt(val: int32);
   fn plus(i1: int32, i2: int32) int32;
   fn getThreadName() *int8;
@@ -20,15 +20,15 @@ persistent {
   pp4: *int32
   pp5: *User
 
-  pp6: *int32
+  pp6: persistent* persistent int32
 }
 
 
-fn thread_cb(val: int32) {
+fn thread_cb(val: int32) void{
   putsInt(123);
 }
 
-fn AL__main() {
+fn AL__main() void {
   p1.i0 = p1.i0 + 1;
   p1.i2 = p1.i2 + 1;
 
@@ -45,7 +45,7 @@ fn AL__main() {
   (*pp5).i0 = 23332;
   putsInt((*pp5).i0);
 
-  nvAllocInt32(volatile(&volatile(pp6)));
+  nvAllocInt32(volatile(&pp6));
   *pp6 = *pp6 + 2;
   putsInt(*pp6);
 

@@ -121,7 +121,7 @@ void al::CompileTime::finish1() {
 }
 
 llvm::Value *al::CompileTime::createGetIntNvmVar(const std::string &name) {
-  if (this->persistentSymbolTable.find(name) == this->persistentSymbolTable.end()) {
+  if (!this->hasSymbol(name)) {
     cerr << "Persistent var not found " << name << endl;
     abort();
   }
@@ -138,58 +138,39 @@ llvm::Value *al::CompileTime::createGetIntNvmVar(const std::string &name) {
 }
 
 void al::CompileTime::createSetPersistentVar(const std::string &name, llvm::Value *value) {
-  auto pPvType = this->persistentSymbolTable.find(name);
-  if (pPvType == this->persistentSymbolTable.end()) {
+  if (!this->hasSymbol(name)) {
     cerr << "Persistent var not found '" << name << "'" << endl;
     abort();
   }
-  auto pvType = pPvType->second;
-
   int varId = name[name.size() - 1] - '0';
-  if (this->hasType(pvType)) {
-    auto objType = this->getType(pvType);
-    if (objType->getLlvmType()->isIntegerTy(32)) {
-      auto fn = getMainModule()->getOrInsertFunction(
-          "setIntNvmVar",
-          FunctionType::get(
-              Type::getVoidTy(theContext), {Type::getInt32Ty(theContext), Type::getInt32Ty(theContext)}, false
-          )
-      );
-      getCompilerContext().builder->CreateCall(fn, {ConstantInt::get(Type::getInt32Ty(theContext), (uint64_t)varId), value});
-    }
-    else if (objType->getLlvmType()->isStructTy()) {
-      cerr << "unimplemented for struct type" << endl;
-      abort();
-    }
-    else {
-      cerr << "unsupported type" << endl;
-      objType->getLlvmType()->dump();
-      abort();
-    }
-
+  auto objType = this->getSymbolType(name);
+  if (objType->getLlvmType()->isIntegerTy(32)) {
+    auto fn = getMainModule()->getOrInsertFunction(
+        "setIntNvmVar",
+        FunctionType::get(
+            Type::getVoidTy(theContext), {Type::getInt32Ty(theContext), Type::getInt32Ty(theContext)}, false
+        )
+    );
+    getCompilerContext().builder->CreateCall(fn, {ConstantInt::get(Type::getInt32Ty(theContext), (uint64_t)varId), value});
   }
-}
-
-void al::CompileTime::registerPersistentVar(const std::string &name, const std::string &type) {
-  this->persistentSymbolTable[name] = type;
+  else if (objType->getLlvmType()->isStructTy()) {
+    cerr << "unimplemented for struct type" << endl;
+    abort();
+  }
 }
 
 void al::CompileTime::registerBuiltinTypes() {
 
   std::vector<std::pair<std::string, llvm::Type*>> types = {
       {"int32", llvm::Type::getInt32Ty(theContext)},
-      {"*int32", llvm::Type::getInt32PtrTy(theContext)},
       {"int8", llvm::Type::getInt8Ty(theContext)},
-      {"*int8", llvm::Type::getInt8PtrTy(theContext)},
       {"void", llvm::Type::getVoidTy(theContext)},
   };
   for (auto &t1 : types) {
     auto name = t1.first;
-
-    bool isPtr = t1.second->isPointerTy();
     auto node = std::make_shared<al::ast::Type>(
         std::make_shared<ast::Symbol>(name.c_str()),
-        isPtr ? ast::Type::Ptr : ast::Type::None,
+        ast::Type::None,
         t1.second
     );
     this->registerType(name, node);
@@ -197,13 +178,14 @@ void al::CompileTime::registerBuiltinTypes() {
 }
 
 llvm::Value *al::CompileTime::createGetMemNvmVar(const std::string &name) {
-  if (this->persistentSymbolTable.find(name) == this->persistentSymbolTable.end()) {
+  if (!this->hasSymbol(name)) {
     cerr << "Persistent var not found " << name << endl;
     abort();
   }
 
   int varId = name[name.size() - 1] - '0';
-  auto t = this->getType(this->getPersistentVarType(name))->getLlvmType();
+  auto type = this->getSymbolType(name);
+  auto t = type->getLlvmType();
   if (t->isPointerTy()) {
     t = PointerType::get(t->getPointerElementType(), PtrAddressSpace::NVM);
   }
@@ -212,13 +194,13 @@ llvm::Value *al::CompileTime::createGetMemNvmVar(const std::string &name) {
 }
 
 void al::CompileTime::createSetMemNvmVar(const std::string &name, llvm::Value *ptr) {
-  if (this->persistentSymbolTable.find(name) == this->persistentSymbolTable.end()) {
+  if (!this->hasSymbol(name)) {
     cerr << "Persistent var not found " << name << endl;
     abort();
   }
 
   int varId = name[name.size() - 1] - '0';
-  auto t = this->getType(this->getPersistentVarType(name))->getLlvmType();
+  auto t = this->getSymbolType(name)->getLlvmType();
   auto sizeVal = this->getCompilerContext().builder->CreatePtrToInt(
       this->getCompilerContext().builder->CreateGEP(
           t,
@@ -384,5 +366,21 @@ void al::CompileTime::setFunctionStackVariable(const std::string &functionName, 
     this->functionStackVariables[functionName] = std::map<std::string, llvm::Value*>();
   }
   this->functionStackVariables[functionName][varName] = val;
+}
+
+void al::CompileTime::registerSymbol(const std::string &name, std::shared_ptr<al::ast::Type> type) {
+  if (type == nullptr || type->getLlvmType() == nullptr) {
+    cerr << "type of '" << name << "' is nullptr" << endl;
+    cerr << type->toString() << endl;
+    abort();
+  }
+  this->globalSymbolTable[name] = type;
+}
+
+void al::CompileTime::registerType(const std::string &name, std::shared_ptr<al::ast::Type> type) {
+  std::cout << "register type " << name << endl;
+  type->getLlvmType()->dump();
+  this->typeTable[name] = type;
+
 }
 
