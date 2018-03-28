@@ -224,7 +224,6 @@ namespace al {
       CompilerContext cc(ct.getContext(), fn, BasicBlock::Create(ct.getContext(), "entry", fn));
       ct.pushContext(cc);
 
-
       int i = 0;
       for (auto &arg : fn->args()) {
         auto varNewLocation = ct.getCompilerContext().builder->CreateAlloca(argTypes[i]);
@@ -233,7 +232,7 @@ namespace al {
         i++;
       }
 
-      for (auto child : this->getChildren()) {
+      for (auto &child : this->getChildren()) {
         child->visit(ct);
       }
 
@@ -246,11 +245,18 @@ namespace al {
       return this->vr;
     }
 
-    VisitResult ExpVarRef::visit(CompileTime &ct) {
+    void FnDef::preTraverse(CompileTime &ct, PersistentVarTaggingPass &pass) {
+//      cout << "preTraverse(): push scope, name=" << this->getName() << endl;
+      pass.scopeStack.push_back(this->getName());
+    }
+    void FnDef::postTraverse(CompileTime &ct, PersistentVarTaggingPass &pass) {
+//      cout << "postTraverse(): scope, pop scope name=" << this->getName() << endl;
+      pass.scopeStack.pop_back();
+    }
+
+    void ExpVarRef::postVisit(CompileTime &ct) {
       auto &cont = ct.getCompilerContext();
       auto funcVarName = string(ct.getCompilerContext().function->getName()) + "::" + this->name->getName();
-
-
       bool hasGlobalVar = ct.hasSymbol(this->name->getName());
       bool hasFunctionVar = ct.hasSymbol(funcVarName);
 
@@ -293,18 +299,23 @@ namespace al {
           }
         }
       }
-      return vr;
     }
 
     std::string ExpVarRef::getName() const { return name->getName(); }
 
-    VisitResult IntLiteral::visit(CompileTime &ct) {
+    void ExpVarRef::postTraverse(CompileTime &ct, PersistentVarTaggingPass &pass) {
+//      cout << "ExpVarRef::postTraverse(): name=" << this->getName() << ", isAssign=" << pass.isAssign << endl;
+      if (!pass.isAssign) {
+        pass.setPvarTag(pass.getFnName(), this->getName(), PersistentVarTaggingPass::PvarTag::Readable);
+      }
+    }
+
+    void IntLiteral::postVisit(CompileTime &ct) {
       stringstream ss;
       int i;
       ss << this->s;
       ss >> i;
       vr.value = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ct.getContext()), i);
-      return vr;
     }
 
     void PersistentBlock::postVisit(CompileTime &ct) {
@@ -469,6 +480,20 @@ namespace al {
       if (exps.size() != 2) { cerr << "'=' only accepts 2 args" << endl; abort(); }
 
       auto rhs = dynamic_pointer_cast<Exp>(exps[1]);
+
+      // TODO hack for simple variable assignment
+      auto lhsVarRef = dynamic_pointer_cast<ExpVarRef>(exps[0]);
+      if (lhsVarRef != nullptr) {
+        auto fnName = ct.getCompilerContext().function->getName();
+        if (ct.getPvarTagPass().hasPvarTag(fnName, lhsVarRef->getName()) &&
+            ct.getPvarTagPass().getPvarTag(fnName, lhsVarRef->getName()) != PersistentVarTaggingPass::Readable) {
+          // opt it out
+          cout << "opt-out " << lhsVarRef->getName() << endl;
+          vr = rhs->getVR();
+          return;
+        }
+      }
+
       auto rhsVal = rhs->getVR().value;
       auto rhsPtr = rhs->getVR().gepResult;
 
@@ -490,6 +515,19 @@ namespace al {
       );
 
       vr = rhs->getVR();
+    }
+
+    void ExpAssign::traverse(CompileTime &ct, PersistentVarTaggingPass &pass) {
+      auto &children = this->getChildren();
+      for (int i = 0; children.size(); ++i) {
+        if (i == 0) {
+          pass.isAssign = true;
+          children[i]->traverse(ct, pass);
+          pass.isAssign = false;
+        } else {
+          children[i]->traverse(ct, pass);
+        }
+      }
     }
 
     void ExpGetAddr::postVisit(CompileTime &ct) {
@@ -537,6 +575,10 @@ namespace al {
           vr.value,
           vr.gepResult
       );
+    }
+
+    void ExpStackVarDef::postTraverse(CompileTime &ct, PersistentVarTaggingPass &pass) {
+      pass.setPvarTag(pass.getFnName(), this->decl->getName(), PersistentVarTaggingPass::PvarTag::None);
     }
 
     void ExpVolatileCast::postVisit(CompileTime &ct) {

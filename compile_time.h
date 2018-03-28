@@ -6,6 +6,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/BasicBlock.h"
 #include <map>
+#include "ast.h"
 
 
 namespace al {
@@ -74,7 +75,11 @@ namespace al {
     void finish1();
     void setupMainModule();
     void createMainFunc();
-    void traverse1();
+    void traverseAll();
+
+    template<typename T>
+    void traverse(T &t);
+
     void registerBuiltinTypes();
     llvm::Module* getMainModule() const;
 
@@ -121,10 +126,10 @@ namespace al {
     llvm::Value* getFunctionStackVariable(const std::string &functionName, const std::string &varName);
     bool hasFunctionStackVariable(const std::string &functionName, const std::string &varName);
     void setFunctionStackVariable(const std::string &functionName, const std::string &varName, llvm::Value *val);
+    PersistentVarTaggingPass &getPvarTagPass() { return *this->pvarTag; }
 
   public:
     static llvm::Value *getTypeSize(llvm::IRBuilder<> &builder, llvm::Type *s);
-
   private:
 
     llvm::Function *mainFunction;
@@ -142,5 +147,11 @@ namespace al {
     std::map<std::string, std::shared_ptr<ast::Type>> globalSymbolTable;
 
     std::map<std::string, std::map<std::string, llvm::Value*>> functionStackVariables;
+    std::unique_ptr<PersistentVarTaggingPass> pvarTag;
   };
+
+  template<typename T>
+  void CompileTime::traverse(T &t) {
+    this->root->traverse(*this, t);
+  }
 }

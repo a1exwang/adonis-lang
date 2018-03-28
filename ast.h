@@ -8,6 +8,7 @@
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Constants.h>
 #include <iostream>
+#include "passes/pv_tagging.h"
 
 
 namespace al {
@@ -22,8 +23,24 @@ namespace al {
       llvm::Value *gepResult = nullptr;
     };
 
+    template <typename ContextType, typename Myself>
+    class Traversable {
+    public:
+      virtual void preTraverse(CompileTime &rt, ContextType &context) { }
+      virtual void postTraverse(CompileTime &rt, ContextType &context) { }
+      virtual void traverse(CompileTime &rt, ContextType &context) {
+        this->preTraverse(rt, context);
+        for (auto &child : getChildren()) {
+          child->traverse(rt, context);
+        }
+        this->postTraverse(rt, context);
+      }
+      virtual std::vector<std::shared_ptr<Myself>> &getChildren() = 0;
+    };
+
+
     // Visitor design pattern
-    class ASTNode {
+    class ASTNode :public Traversable<PersistentVarTaggingPass, ASTNode> {
     public:
       ASTNode() :vr() { }
       virtual void preVisit(CompileTime &rt) { }
@@ -37,9 +54,10 @@ namespace al {
         postVisit(rt);
         return genVisitResult(rt);
       }
-      virtual std::vector<std::shared_ptr<ASTNode>> getChildren() {
+      virtual std::vector<std::shared_ptr<ASTNode>> &getChildren() {
         return children;
       }
+
 
       void appendChild(const std::shared_ptr<ASTNode> &node) {
         this->children.push_back(node);
@@ -223,6 +241,9 @@ namespace al {
       VisitResult visit(CompileTime &rt) override;
       std::string getName() const;
       std::string getLinkageName() const;
+
+      void postTraverse(CompileTime &ct, PersistentVarTaggingPass &pass) override;
+      void preTraverse(CompileTime &ct, PersistentVarTaggingPass &pass) override;
     private:
       sp<FnDecl> decl;
     };
@@ -247,12 +268,15 @@ namespace al {
     public:
       ExpAssign(const sp<Exp> &lhs, const sp<Exp> &rhs) { appendChild(lhs); appendChild(rhs); }
       void postVisit(CompileTime &ct) override;
+      void traverse(CompileTime &ct, PersistentVarTaggingPass &pass) override;
     };
     class ExpVarRef :public Exp {
     public:
       explicit ExpVarRef(sp<Symbol> name) :name(std::move(name)) {}
-      VisitResult visit(CompileTime &ct) override;
+      void postVisit(CompileTime &ct) override;
       std::string getName() const;
+      void postTraverse(CompileTime &ct, PersistentVarTaggingPass &pass) override;
+
     private:
       sp<Symbol> name;
     };
@@ -260,6 +284,7 @@ namespace al {
     public:
       ExpStackVarDef(sp<VarDecl> decl, sp<Exp> exp) :decl(decl), exp(exp) { appendChild(decl); appendChild(exp); }
       void postVisit(CompileTime &ct) override;
+      void postTraverse(CompileTime &ct, PersistentVarTaggingPass &pass) override;
     private:
       sp<VarDecl> decl;
       sp<Exp> exp;
@@ -354,7 +379,7 @@ namespace al {
       std::string getValue() const {
         return this->s;
       }
-      VisitResult visit(CompileTime &ct) override;
+      void postVisit(CompileTime &ct) override;
     private:
       std::string s;
     };

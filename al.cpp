@@ -36,8 +36,9 @@ al::CompileTime *compile(int argc, char** argv) {
   /**
    * AST passes
    */
+
   rt->init1();
-  rt->traverse1();
+  rt->traverseAll();
   rt->finish1();
 
   return rt;

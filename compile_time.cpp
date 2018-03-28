@@ -25,7 +25,8 @@
 using namespace llvm;
 using namespace std;
 
-void al::CompileTime::traverse1() {
+void al::CompileTime::traverseAll() {
+  this->root->traverse(*this, *this->pvarTag);
   this->root->visit(*this);
 }
 
@@ -35,7 +36,7 @@ void al::CompileTime::setupMainModule() {
 
 }
 
-al::CompileTime::CompileTime() :theContext(), strCounter(0) {
+al::CompileTime::CompileTime() :theContext(), strCounter(0), pvarTag(make_unique<PersistentVarTaggingPass>()) {
 }
 
 llvm::Module* al::CompileTime::getMainModule() const { return mainModule.get(); }
@@ -378,9 +379,6 @@ void al::CompileTime::registerSymbol(const std::string &name, std::shared_ptr<al
 }
 
 void al::CompileTime::registerType(const std::string &name, std::shared_ptr<al::ast::Type> type) {
-  std::cout << "register type " << name << endl;
-  type->getLlvmType()->dump();
   this->typeTable[name] = type;
-
 }
 
