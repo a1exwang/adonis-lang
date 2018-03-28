@@ -191,6 +191,7 @@ namespace al {
       void parseLlvmType(CompileTime &ct);
 
       void postVisit(CompileTime &ct) override;
+      int getAttrs() const { return attrs; }
     private:
       sp<Symbol> symbol;
       sp<Type> originalType;

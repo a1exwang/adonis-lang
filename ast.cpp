@@ -248,31 +248,47 @@ namespace al {
 
     VisitResult ExpVarRef::visit(CompileTime &ct) {
       auto &cont = ct.getCompilerContext();
+      auto funcVarName = string(ct.getCompilerContext().function->getName()) + "::" + this->name->getName();
+
+
+      bool hasGlobalVar = ct.hasSymbol(this->name->getName());
+      bool hasFunctionVar = ct.hasSymbol(funcVarName);
+
       if (ct.hasFunctionStackVariable(ct.getCompilerContext().function->getName(), this->name->getName())) {
+        // stack variables
         auto var = ct.getFunctionStackVariable(ct.getCompilerContext().function->getName(), this->name->getName());
         vr.value = cont.builder->CreateLoad(var);
         vr.gepResult = var;
       }
-      else if (ct.hasSymbol(this->name->getName())) {
-        auto type = ct.getSymbolType(this->name->getName());
+      else if (hasGlobalVar || hasFunctionVar) {
+        // function/global persistent/volatile variables
+        string varName;
+        if (hasGlobalVar) {
+          varName = this->name->getName();
+        } else {
+          varName = funcVarName;
+        }
+
+        auto type = ct.getSymbolType(varName);
         if (type->getLlvmType()->isStructTy() ||
             type->getLlvmType()->isIntegerTy(32) ||
             type->getLlvmType()->isPointerTy()) {
-          vr.gepResult = ct.createGetMemNvmVar(this->name->getName());
+          // FIXME: support global volatile variables
+          vr.gepResult = ct.createGetMemNvmVar(varName);
           vr.value = ct.getCompilerContext().builder->CreateLoad(vr.gepResult);
         }
         else {
-          cerr << "persistent var type not supported '" << this->name->getName() << "'" << endl;
+          cerr << "persistent var type not supported '" << varName << "'" << endl;
         }
       }
       else {
-        // check for function name
+        // global adonis-lang functions
         vr.value = ct.getMainModule()->getFunction(this->name->getName());
-        if (vr.value) {
-        } else {
+        if (vr.value == nullptr) {
+          // external global symbol(functions/variables)
           vr.value = ct.getMainModule()->getGlobalVariable(this->name->getName());
           if (vr.value == nullptr) {
-            cerr << "no global var, function or persistent var found named '" << this->name->getName() << "'" << endl;
+            cerr << "no stack var, function persistent var, global var, function or global persistent var found named '" << this->name->getName() << "'" << endl;
             abort();
           }
         }
@@ -497,15 +513,26 @@ namespace al {
     void ExpStackVarDef::postVisit(CompileTime &ct) {
       auto vr = this->exp->getVR();
       auto &cc = ct.getCompilerContext();
-      auto type = this->decl->getType()->getLlvmType();
-      auto var = cc.builder->CreateAlloca(type);
-      ct.setFunctionStackVariable(
-          ct.getCompilerContext().function->getName(),
-          this->decl->getName(),
-          var
-      );
+      auto type = this->decl->getType();
+      auto llvmType = type->getLlvmType();
+      llvm::Value *var;
+      if (type->getAttrs() & ast::Type::Persistent) {
+        auto varName = string(ct.getCompilerContext().function->getName()) + "::" + this->decl->getName();
+        ct.registerSymbol(
+            varName,
+            type
+        );
+        var = ct.createGetMemNvmVar(varName);
+      } else {
+        var = cc.builder->CreateAlloca(llvmType);
+        ct.setFunctionStackVariable(
+            ct.getCompilerContext().function->getName(),
+            this->decl->getName(),
+            var
+        );
+      }
       ct.createAssignment(
-          type,
+          llvmType,
           var,
           vr.value,
           vr.gepResult

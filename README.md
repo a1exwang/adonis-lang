@@ -178,3 +178,20 @@ fn main() {
 - function scope nvm variables, delayed or canceled persistence
 - persistent gc
 
+
+## GC implementation
+
+#### Roots
+- Named persistent vars
+- Stack vars
+
+#### Branches
+- Array elements
+- Struct members
+- Pointed objects
+
+#### Consistency
+- Stop the world
+
+#### Trigger
+- Manually or by memory usage or on start up
