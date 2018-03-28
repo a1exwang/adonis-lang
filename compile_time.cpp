@@ -337,7 +337,7 @@ void al::CompileTime::createAssignment(
   }
   else {
     cerr << "type not supported" << endl;
-    elementType->dump();
+    elementType->print(llvm::errs());
     abort();
   }
 
@@ -380,5 +380,14 @@ void al::CompileTime::registerSymbol(const std::string &name, std::shared_ptr<al
 
 void al::CompileTime::registerType(const std::string &name, std::shared_ptr<al::ast::Type> type) {
   this->typeTable[name] = type;
+}
+
+void al::CompileTime::unsetFunctionStackVariable(const std::string &functionName, const std::string &varName) {
+
+  auto it = this->functionStackVariables.find(functionName);
+  if (it != this->functionStackVariables.end()) {
+    auto it2 = it->second.find(varName);
+    it->second.erase(it2);
+  }
 }
 

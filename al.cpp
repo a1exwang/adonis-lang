@@ -31,7 +31,10 @@ al::CompileTime *compile(int argc, char** argv) {
 
   al::Lexer lexer(str);
   al::Parser parser(lexer, *rt);
-  parser.parse();
+  int result = parser.parse();
+  if (result != 0) {
+    abort();
+  }
 
   /**
    * AST passes

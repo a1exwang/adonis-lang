@@ -40,6 +40,12 @@ al::Parser::symbol_type al::Lexer::lex() {
       {"\\s+", nullptr},
       {"#.*\n", nullptr},
       {
+          "\\<-",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_OP_MOVE(Parser::location_type());
+          }
+      },
+      {
           "\\(",
           [](const std::string &s) -> Parser::symbol_type {
             return Parser::make_LEFTPAR(Parser::location_type());

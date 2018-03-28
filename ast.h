@@ -264,22 +264,46 @@ namespace al {
     private:
       std::string name;
     };
-    class ExpAssign :public Exp {
-    public:
-      ExpAssign(const sp<Exp> &lhs, const sp<Exp> &rhs) { appendChild(lhs); appendChild(rhs); }
-      void postVisit(CompileTime &ct) override;
-      void traverse(CompileTime &ct, PersistentVarTaggingPass &pass) override;
-    };
     class ExpVarRef :public Exp {
     public:
-      explicit ExpVarRef(sp<Symbol> name) :name(std::move(name)) {}
+      enum VarRefType {
+        Invalid = 0,
+        StackVolatile = 1,
+        FunctionPersistent = 2,
+        GlobalPersistent = 3,
+        Function = 4,
+        External = 5
+      };
+      explicit ExpVarRef(sp<Symbol> name) :name(std::move(name)), varRefType(Invalid) {}
       void postVisit(CompileTime &ct) override;
       std::string getName() const;
       void postTraverse(CompileTime &ct, PersistentVarTaggingPass &pass) override;
-
+      VarRefType getVarRefType() const { return varRefType; }
     private:
       sp<Symbol> name;
+      VarRefType varRefType;
     };
+
+    class ExpAssign :public Exp {
+    public:
+      ExpAssign(const sp<Exp> &lhs, const sp<Exp> &rhs) {
+        appendChild(lhs); appendChild(rhs);
+      }
+      void postVisit(CompileTime &ct) override;
+      void traverse(CompileTime &ct, PersistentVarTaggingPass &pass) override;
+    };
+    class ExpMove :public Exp {
+    public:
+      ExpMove(const sp<ExpVarRef> &lhs, const sp<ExpVarRef> &rhs) :lhs(lhs), rhs(rhs) {
+        appendChild(lhs);
+        appendChild(rhs);
+      }
+      void postVisit(CompileTime &ct) override;
+    private:
+      sp<ExpVarRef> lhs;
+      sp<ExpVarRef> rhs;
+    };
+
     class ExpStackVarDef :public Exp {
     public:
       ExpStackVarDef(sp<VarDecl> decl, sp<Exp> exp) :decl(decl), exp(exp) { appendChild(decl); appendChild(exp); }

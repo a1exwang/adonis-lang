@@ -126,6 +126,7 @@ namespace al {
     llvm::Value* getFunctionStackVariable(const std::string &functionName, const std::string &varName);
     bool hasFunctionStackVariable(const std::string &functionName, const std::string &varName);
     void setFunctionStackVariable(const std::string &functionName, const std::string &varName, llvm::Value *val);
+    void unsetFunctionStackVariable(const std::string &functionName, const std::string &varName);
     PersistentVarTaggingPass &getPvarTagPass() { return *this->pvarTag; }
 
   public:

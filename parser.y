@@ -47,7 +47,7 @@
 
 %token FN FOR STRUCT PERSISTENT EXTERN VOLATILE
 %token SEMICOLON ";";
-%token COLON COMMA BANG AT
+%token COLON COMMA BANG AT OP_MOVE
 %token QUOTE "'";
 %right RIGHT_ARROW
 %right EQ
@@ -82,6 +82,7 @@
 %type< std::shared_ptr<al::ast::Exp> > exp;
 %type< std::shared_ptr<al::ast::ExpCall> > exp_op;
 %type< std::shared_ptr<al::ast::ExpAssign> > exp_assign;
+%type< std::shared_ptr<al::ast::ExpMove> > exp_move;
 %type< std::shared_ptr<al::ast::ExpCall> > exp_call;
 %type< std::shared_ptr<al::ast::ExpVarRef> > exp_var_ref;
 %type< std::shared_ptr<al::ast::ExpStackVarDef> > exp_var_def;
@@ -173,6 +174,7 @@ stmt: exp SEMICOLON { $$ = $1; }
 exp: exp_call { $$ = $1; }
     | exp_op { $$ = $1; }
     | exp_assign { $$ = $1; }
+    | exp_move { $$ = $1; }
     | exp_var_def { $$ = $1; }
     | exp_var_ref { $$ = $1; }
     | exp_member { $$ = $1; }
@@ -196,6 +198,7 @@ exp_op: exp PLUS exp {
       $$ = std::make_shared<al::ast::ExpCall>("<", std::vector<std::shared_ptr<al::ast::Exp>>({$1, $3}));
       }
 exp_assign: exp EQ exp { $$ = std::make_shared<al::ast::ExpAssign>($1, $3); }
+exp_move: exp_var_ref OP_MOVE exp_var_ref { $$ = std::make_shared<al::ast::ExpMove>($1, $3); }
 
 exp_var_ref: SYMBOL_LIT { $$ = std::make_shared<al::ast::ExpVarRef>($1); }
 exp_var_def: var_decl EQ exp { $$ = std::make_shared<al::ast::ExpStackVarDef>($1, $3); }

@@ -265,14 +265,17 @@ namespace al {
         auto var = ct.getFunctionStackVariable(ct.getCompilerContext().function->getName(), this->name->getName());
         vr.value = cont.builder->CreateLoad(var);
         vr.gepResult = var;
+        this->varRefType = StackVolatile;
       }
       else if (hasGlobalVar || hasFunctionVar) {
         // function/global persistent/volatile variables
         string varName;
         if (hasGlobalVar) {
           varName = this->name->getName();
+          this->varRefType = VarRefType::GlobalPersistent;
         } else {
           varName = funcVarName;
+          this->varRefType = VarRefType::FunctionPersistent;
         }
 
         auto type = ct.getSymbolType(varName);
@@ -290,13 +293,16 @@ namespace al {
       else {
         // global adonis-lang functions
         vr.value = ct.getMainModule()->getFunction(this->name->getName());
-        if (vr.value == nullptr) {
+        if (vr.value != nullptr) {
+          this->varRefType = VarRefType::Function;
+        } else {
           // external global symbol(functions/variables)
           vr.value = ct.getMainModule()->getGlobalVariable(this->name->getName());
           if (vr.value == nullptr) {
             cerr << "no stack var, function persistent var, global var, function or global persistent var found named '" << this->name->getName() << "'" << endl;
             abort();
           }
+          this->varRefType = VarRefType::External;
         }
       }
     }
@@ -543,7 +549,7 @@ namespace al {
       }
       else {
         cerr << "not a pointer " << ptr->getName().str() << endl;
-        ptr->dump();
+        ptr->print(llvm::errs());
         abort();
       }
     }
@@ -766,6 +772,16 @@ namespace al {
       ss << batchCountParam->getValue();
       ss >> ret;
       return ret;
+    }
+
+    void ExpMove::postVisit(CompileTime &ct) {
+      if (this->lhs->getVarRefType() == this->rhs->getVarRefType() &&
+          this->lhs->getVarRefType() == ExpVarRef::VarRefType::StackVolatile) {
+        auto fnName = ct.getCompilerContext().function->getName();
+        auto rhsVar = ct.getFunctionStackVariable(ct.getCompilerContext().function->getName(), this->rhs->getName());
+        ct.setFunctionStackVariable(fnName, this->lhs->getName(), rhsVar);
+        ct.unsetFunctionStackVariable(fnName, this->rhs->getName());
+      }
     }
   }
 }
