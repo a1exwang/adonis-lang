@@ -157,6 +157,7 @@ namespace al {
           llvm::Type *llvmType = nullptr,
           std::shared_ptr<Exp> arraySizeVal = nullptr
       );
+      static sp<Type> getInt32Type(llvm::LLVMContext &context);
 
       /**
        * Create a pointer or persistent type
@@ -206,6 +207,8 @@ namespace al {
       std::string toString() const;
 
       static llvm::PointerType *getArrayPtrType(llvm::Type *elementType);
+      static llvm::Value *ptrToElementCountOfArray(llvm::IRBuilder<> &builder, llvm::Value *arr);
+      static llvm::Value *dataPtrOfArray(llvm::IRBuilder<> &builder, llvm::Value *arr);
       static llvm::Value *sizeOfArray(llvm::IRBuilder<> &builder, llvm::PointerType *arrayPtrType, llvm::Value *len);
       static void arrayCopy(llvm::IRBuilder<> &builder, llvm::Value *dst, llvm::Value *src);
       static llvm::Value *getArrayElementPtr(llvm::IRBuilder<> &builder, llvm::Value *arrStruct, llvm::Value *index);
@@ -256,6 +259,9 @@ namespace al {
     };
 
     class Exp :public Stmt {
+    public:
+      bool isLValue() const { return this->vr.gepResult != nullptr; }
+      virtual sp<Type> getType(CompileTime &ct) { return nullptr; }
     };
 
     class ExpCall :public Exp {
@@ -329,6 +335,14 @@ namespace al {
     private:
       sp<Exp> obj;
       sp<Symbol> member;
+    };
+    class ExpArrayIndex :public Exp {
+    public:
+      ExpArrayIndex(sp<Exp> arr, sp<Exp> index) :arr(arr), index(index) { appendChild(arr); appendChild(index); }
+      void postVisit(CompileTime &ct) override;
+    private:
+      sp<Exp> arr;
+      sp<Exp> index;
     };
     class ExpGetAddr :public Exp {
     public:
@@ -411,8 +425,20 @@ namespace al {
         return this->s;
       }
       void postVisit(CompileTime &ct) override;
+      sp<Type> getType(CompileTime &ct) override;
     private:
       std::string s;
+    };
+    class ArrayLiteral :public Literal {
+    public:
+      explicit ArrayLiteral(sp<ExpList> exps) :exps(exps) {
+        appendChild(exps);
+      }
+      void postVisit(CompileTime &ct) override;
+      uint64_t getSize() const { return exps->getChildren().size(); }
+    private:
+      sp<ExpList> exps;
+      sp<Type> type;
     };
     class Annotation :public ASTNode {
     public:

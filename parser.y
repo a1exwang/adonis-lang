@@ -88,7 +88,9 @@
 %type< std::shared_ptr<al::ast::ExpVarRef> > exp_var_ref;
 %type< std::shared_ptr<al::ast::ExpStackVarDef> > exp_var_def;
 %type< std::shared_ptr<al::ast::ExpMemberAccess> > exp_member;
+%type< std::shared_ptr<al::ast::ExpArrayIndex> > exp_array_index;
 %type< std::shared_ptr<al::ast::Literal> > exp_lit;
+%type< std::shared_ptr<al::ast::ArrayLiteral> > exp_array_lit;
 %type< std::shared_ptr<al::ast::ExpDeref> > exp_deref;
 %type< std::shared_ptr<al::ast::ExpGetAddr> > exp_get_addr;
 %type< std::shared_ptr<al::ast::ExpVolatileCast> > exp_volatile_cast;
@@ -179,6 +181,7 @@ exp: exp_call { $$ = $1; }
     | exp_var_def { $$ = $1; }
     | exp_var_ref { $$ = $1; }
     | exp_member { $$ = $1; }
+    | exp_array_index { $$ = $1; }
     | exp_lit { $$ = $1; }
     | exp_get_addr { $$ = $1; }
     | exp_deref { $$ = $1; }
@@ -205,6 +208,11 @@ exp_var_ref: SYMBOL_LIT { $$ = std::make_shared<al::ast::ExpVarRef>($1); }
 exp_var_def: var_decl EQ exp { $$ = std::make_shared<al::ast::ExpStackVarDef>($1, $3); }
 exp_member: exp DOT SYMBOL_LIT { $$ = std::make_shared<al::ast::ExpMemberAccess>($1, $3); }
 exp_lit: INT_LIT { $$ = $1; }
+    | exp_array_lit { $$ = $1; }
+exp_array_lit: LEFTBRACKET exps RIGHTBRACKET { $$ = std::make_shared<al::ast::ArrayLiteral>($2); }
+
+exp_array_index: exp DOT LEFTBRACKET exp RIGHTBRACKET { $$ = std::make_shared<al::ast::ExpArrayIndex>($1, $4); }
+
 exp_get_addr: AND exp { $$ = std::make_shared<al::ast::ExpGetAddr>($2); }
 exp_deref: STAR exp { $$ = std::make_shared<al::ast::ExpDeref>($2); }
 exp_volatile_cast: VOLATILE LEFTPAR exp RIGHTPAR { $$ = std::make_shared<al::ast::ExpVolatileCast>($3); }

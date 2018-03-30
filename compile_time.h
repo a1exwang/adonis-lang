@@ -117,11 +117,12 @@ namespace al {
       return this->globalSymbolTable[name];
     }
     void createAssignment(
-        llvm::Type *elementType,
+        llvm::Type *type,
         llvm::Value *lhsPtr,
         llvm::Value *rhsVal,
         llvm::Value *rhsPtr,
-        llvm::Value *persistNvm = nullptr
+        llvm::Value *persistNvm = nullptr,
+        bool isArray = false
     );
     llvm::Value* getFunctionStackVariable(const std::string &functionName, const std::string &varName);
     bool hasFunctionStackVariable(const std::string &functionName, const std::string &varName);

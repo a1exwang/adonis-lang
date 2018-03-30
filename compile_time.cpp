@@ -323,30 +323,37 @@ void al::CompileTime::createAssignment(
     llvm::Value *lhsPtr,
     llvm::Value *rhsVal,
     llvm::Value *rhsPtr,
-    llvm::Value *persistNvm
+    llvm::Value *persistNvm,
+    bool isArray
 ) {
   auto builder = getCompilerContext().builder;
-  if (elementType->isIntegerTy(32) ||
-      elementType->isPointerTy() ||
-      elementType->isStructTy()) {
-    auto a = static_cast<llvm::PointerType*>(lhsPtr->getType());
-    auto vPtr = llvm::PointerType::get(a->getElementType(), PtrAddressSpace::Volatile);
-    auto lhsNewPtr = builder->CreatePointerCast(lhsPtr, vPtr);
 
-    builder->CreateStore(rhsVal, lhsPtr);
-  }
-  else {
-    cerr << "type not supported" << endl;
-    elementType->print(llvm::errs());
-    abort();
-  }
+  if (isArray) {
+    // Array copy for arrays
+    ast::Type::arrayCopy(*builder, lhsPtr, rhsPtr);
+  } else {
+    if (elementType->isIntegerTy(32) ||
+        elementType->isPointerTy() ||
+        elementType->isStructTy()) {
+      auto a = static_cast<llvm::PointerType*>(lhsPtr->getType());
+      auto vPtr = llvm::PointerType::get(a->getElementType(), PtrAddressSpace::Volatile);
+      auto lhsNewPtr = builder->CreatePointerCast(lhsPtr, vPtr);
 
-  if (persistNvm && lhsPtr->getType()->getPointerAddressSpace() == PtrAddressSpace::NVM) {
-    createCommitPersistentVarIfOk(
-        lhsPtr,
-        getTypeSize(*builder, elementType),
-        persistNvm
-    );
+      builder->CreateStore(rhsVal, lhsNewPtr);
+    }
+    else {
+      cerr << "type not supported" << endl;
+      elementType->print(llvm::errs());
+      abort();
+    }
+
+    if (persistNvm && lhsPtr->getType()->getPointerAddressSpace() == PtrAddressSpace::NVM) {
+      createCommitPersistentVarIfOk(
+          lhsPtr,
+          getTypeSize(*builder, elementType),
+          persistNvm
+      );
+    }
   }
 }
 

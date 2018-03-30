@@ -21,8 +21,6 @@ namespace al {
     }
 
     void ExpList::preVisit(CompileTime &) {
-      std::cout << std::string((uint32_t)this->indent, '\t')
-                << "exp_list" << std::endl;
       this->incIndent();
     }
 
@@ -236,6 +234,41 @@ namespace al {
       }
     }
 
+    void Type::arrayCopy(IRBuilder<> &builder, llvm::Value *dst, llvm::Value *src) {
+      llvm::Value *n = Type::ptrToElementCountOfArray(builder, dst);
+      llvm::Value *dstData = Type::dataPtrOfArray(builder, dst);
+      llvm::Value *srcData = Type::dataPtrOfArray(builder, src);
+
+      builder.CreateMemCpy(
+          dstData,
+          srcData,
+//          builder.CreateLoad(n),
+          llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(builder.getContext()), 1),
+          8
+      );
+    }
+
+    sp<Type> Type::getInt32Type(llvm::LLVMContext &context) {
+      return std::make_shared<Type>(std::make_shared<Symbol>("int32"), None, llvm::IntegerType::getInt32Ty(context));
+    }
+
+    llvm::Value *Type::ptrToElementCountOfArray(IRBuilder<> &builder, llvm::Value *arr) {
+      return builder.CreateBitCast(
+          arr,
+          llvm::PointerType::get(llvm::IntegerType::getInt64Ty(builder.getContext()), PtrAddressSpace::Volatile)
+      );
+    }
+
+    llvm::Value *Type::dataPtrOfArray(llvm::IRBuilder<> &builder, llvm::Value *arr) {
+      return builder.CreateGEP(
+          arr,
+          {
+              llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(builder.getContext()), 0),
+              llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(builder.getContext()), 1)
+          }
+      );
+    }
+
     ExpCall::ExpCall(const std::shared_ptr<Symbol> &name, std::vector<std::shared_ptr<Exp>> exps)
         :ExpCall(name->getName(), exps) {}
 
@@ -402,6 +435,10 @@ namespace al {
       vr.value = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ct.getContext()), i);
     }
 
+    sp<Type> IntLiteral::getType(CompileTime &ct) {
+      return Type::getInt32Type(ct.getContext());
+    }
+
     void PersistentBlock::postVisit(CompileTime &ct) {
       for (const auto &_varDecl : getChildren()[0]->getChildren()) {
         auto varDecl = std::dynamic_pointer_cast<VarDecl>(_varDecl);
@@ -565,7 +602,7 @@ namespace al {
 
       auto rhs = dynamic_pointer_cast<Exp>(exps[1]);
 
-      // TODO hack for simple variable assignment
+      // TODO this is a hack for simple variable assignment
       auto lhsVarRef = dynamic_pointer_cast<ExpVarRef>(exps[0]);
       if (lhsVarRef != nullptr) {
         auto fnName = ct.getCompilerContext().function->getName();
@@ -581,8 +618,8 @@ namespace al {
       auto rhsVal = rhs->getVR().value;
       auto rhsPtr = rhs->getVR().gepResult;
 
-      auto lhsPtr = exps[0]->getVR().gepResult;
-      auto elementType = lhsPtr->getType()->getPointerElementType();
+      auto lhs = dynamic_pointer_cast<Exp>(exps[0]);
+      auto lhsPtr = lhs->getVR().gepResult;
 
       // If lhs is a symbol, we support a batch operation
       llvm::Value *onBatchSizeVal = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(ct.getContext()), 1);
@@ -591,7 +628,7 @@ namespace al {
       }
 
       ct.createAssignment(
-          elementType,
+          lhsPtr->getType()->getPointerElementType(), // TODO
           lhsPtr,
           rhsVal,
           rhsPtr,
@@ -666,7 +703,9 @@ namespace al {
           llvmType,
           var,
           expVr.value,
-          expVr.gepResult
+          expVr.gepResult,
+          nullptr,
+          (type->getAttrs() & Type::Array) != 0
       );
     }
 
@@ -869,6 +908,55 @@ namespace al {
         ct.setFunctionStackVariable(fnName, this->lhs->getName(), rhsVar);
         ct.unsetFunctionStackVariable(fnName, this->rhs->getName());
       }
+    }
+
+    void ArrayLiteral::postVisit(CompileTime &ct) {
+      // TODO: add for empty array support
+      assert(!this->exps->getChildren().empty());
+      auto firstElement = dynamic_pointer_cast<Exp>(this->exps->getChildren()[0]);
+
+      stringstream ss;
+      string sInt;
+      ss << this->exps->getChildren().size();
+      ss >> sInt;
+      this->type = std::make_shared<Type>(
+          firstElement->getType(ct),
+          Type::Array,
+          std::make_shared<ast::IntLiteral>(sInt)
+      );
+      this->type->visit(ct);
+
+      auto arrayElementPtrType = reinterpret_cast<llvm::PointerType*>(this->type->getLlvmType());
+      auto arr = Type::createArrayByAlloca(
+          *ct.getCompilerContext().builder,
+          arrayElementPtrType,
+          this->type->getArraySizeVal()
+      );
+      for (int i = 0; i < this->exps->getChildren().size(); ++i) {
+        auto exp = dynamic_pointer_cast<Exp>(this->exps->getChildren()[i]);
+        auto vr = exp->getVR();
+        ct.createAssignment(
+            arrayElementPtrType->getElementType(),
+            Type::getArrayElementPtr(
+                *ct.getCompilerContext().builder,
+                arr,
+                llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(ct.getContext()), i)
+            ),
+            vr.value,
+            vr.gepResult,
+            nullptr,
+            false /* FIXME: assume array element cannot be an array */
+
+        );
+      }
+
+      this->vr.gepResult = arr;
+    }
+
+    void ExpArrayIndex::postVisit(CompileTime &ct) {
+      auto elementPtr = Type::getArrayElementPtr(*ct.getCompilerContext().builder, arr->getVR().gepResult, this->index->getVR().value);
+      this->vr.gepResult = elementPtr;
+      this->vr.value = ct.getCompilerContext().builder->CreateLoad(elementPtr);
     }
   }
 }
