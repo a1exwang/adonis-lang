@@ -8,6 +8,7 @@
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Constants.h>
 #include <iostream>
+#include <llvm/IR/IRBuilder.h>
 #include "passes/pv_tagging.h"
 
 
@@ -88,6 +89,7 @@ namespace al {
     class Symbol;
     class Type;
     class Annotation;
+    class Exp;
     class Decl :public ASTNode {
     };
     class Decls :public ASTNode { };
@@ -141,7 +143,7 @@ namespace al {
     };
     class Type :public ASTNode {
     public:
-      enum { None = 1, Ptr = 2, Persistent = 4, Fn = 8 };
+      enum { None = 1, Ptr = 2, Persistent = 4, Fn = 8, Array = 16 };
 
       /**
        * Create a symbol ref pre-defined type
@@ -152,8 +154,9 @@ namespace al {
       explicit Type(
           std::shared_ptr<Symbol> symbol = std::make_shared<Symbol>("void"),
           int attrs = None,
-          llvm::Type *llvmType = nullptr
-      ) :symbol(std::move(symbol)), attrs(attrs), llvmType(llvmType) {}
+          llvm::Type *llvmType = nullptr,
+          std::shared_ptr<Exp> arraySizeVal = nullptr
+      );
 
       /**
        * Create a pointer or persistent type
@@ -162,14 +165,9 @@ namespace al {
        */
       explicit Type(
           const sp<Type> &originalType,
-          int attrs = None
-      ) :originalType(originalType), attrs(attrs) {
-        if (originalType == nullptr) {
-          std::cerr << "originalType == nullptr" << std::endl;
-          abort();
-        }
-        appendChild(this->originalType);
-      }
+          int attrs = None,
+          std::shared_ptr<Exp> arraySizeVal = nullptr
+      );
 
       /**
        * Create a function type
@@ -206,7 +204,15 @@ namespace al {
       sp<VarDecls> getArgs() { return fnTypeArgs; }
       std::vector<std::string> getMembers() { return memberNames; }
       std::string toString() const;
+
+      static llvm::PointerType *getArrayPtrType(llvm::Type *elementType);
+      static llvm::Value *sizeOfArray(llvm::IRBuilder<> &builder, llvm::PointerType *arrayPtrType, llvm::Value *len);
+      static void arrayCopy(llvm::IRBuilder<> &builder, llvm::Value *dst, llvm::Value *src);
+      static llvm::Value *getArrayElementPtr(llvm::IRBuilder<> &builder, llvm::Value *arrStruct, llvm::Value *index);
+      static llvm::Value *createArrayByAlloca(llvm::IRBuilder<> &builder, llvm::PointerType *arrPtrType, llvm::Value *len);
+
       void parseLlvmType(CompileTime &ct);
+      llvm::Value *getArraySizeVal() const;
 
       void postVisit(CompileTime &ct) override;
       int getAttrs() const { return attrs; }
@@ -218,6 +224,7 @@ namespace al {
       sp<VarDecls> fnTypeArgs;
       llvm::Type *llvmType{};
       std::vector<std::string> memberNames;
+      sp<Exp> arraySizeVal;
     };
 
     class Stmt :public ASTNode {

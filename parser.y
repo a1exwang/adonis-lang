@@ -56,6 +56,7 @@
 %left PLUS
 %left STAR
 %left DOT
+%token LEFTBRACKET RIGHTBRACKET
 %token LEFTBRACE RIGHTBRACE
 %token LEFTPAR RIGHTPAR
 %token <std::shared_ptr<al::ast::StringLiteral>> STRING_LIT
@@ -228,6 +229,7 @@ var_decl: SYMBOL_LIT COLON type {
 
 type: SYMBOL_LIT { $$ = std::make_shared<al::ast::Type>($1); }
     | STAR type { $$ = std::make_shared<al::ast::Type>($2, al::ast::Type::Ptr); }
+    | LEFTBRACKET exp RIGHTBRACKET type { $$ = std::make_shared<al::ast::Type>($4, al::ast::Type::Array, $2); }
     | PERSISTENT type { $$ = std::make_shared<al::ast::Type>($2, al::ast::Type::Persistent); }
     | FN LEFTPAR fn_args RIGHTPAR { $$ = std::make_shared<al::ast::Type>($3); }
     | FN LEFTPAR RIGHTPAR {

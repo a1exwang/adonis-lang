@@ -127,9 +127,12 @@ namespace al {
         } else if (this->attrs & Ptr) {
           this->originalType->parseLlvmType(ct);
           this->llvmType = llvm::PointerType::get(this->originalType->getLlvmType(), PtrAddressSpace::Volatile);
+        } else if (this->attrs & Array) {
+          this->originalType->parseLlvmType(ct);
+          this->llvmType = this->getArrayPtrType(this->originalType->getLlvmType());
         } else if (this->attrs & Persistent) {
           this->originalType->parseLlvmType(ct);
-          if (this->originalType->attrs & Ptr) {
+          if ((this->originalType->attrs & Ptr) || (this->originalType->attrs & Array)) {
             this->llvmType = llvm::PointerType::get(
                 ((llvm::PointerType*)this->originalType->getLlvmType())->getPointerElementType(),
                 PtrAddressSpace::NVM
@@ -155,6 +158,81 @@ namespace al {
           );
           this->llvmType = llvm::PointerType::get(fnType, Volatile);
         }
+      }
+    }
+
+    llvm::Value *Type::sizeOfArray(llvm::IRBuilder<> &builder, llvm::PointerType *arrayPtrType, llvm::Value *len) {
+      auto lenSize = llvm::ConstantInt::get(
+          llvm::IntegerType::getInt64Ty(arrayPtrType->getContext()),
+          llvm::IntegerType::getInt64Ty(arrayPtrType->getContext())->getScalarSizeInBits() / 8
+      );
+      auto arrayStructType = reinterpret_cast<llvm::StructType*>(arrayPtrType->getElementType());
+      auto arrayElementType = reinterpret_cast<llvm::ArrayType*>(arrayStructType->getElementType(1))->getElementType();
+      auto arrayElementSize = arrayElementType->getPrimitiveSizeInBits() / 8;
+
+      return builder.CreateAdd(
+          builder.CreateMul(len, llvm::ConstantInt::get(llvm::Type::getInt64Ty(arrayPtrType->getContext()), arrayElementSize)),
+          lenSize
+      );
+    }
+
+    llvm::PointerType *Type::getArrayPtrType(llvm::Type *elementType) {
+      /**
+       * struct {
+       *   uint64_t len;
+       *   T arr[0];
+       * }
+       */
+      return llvm::PointerType::get(
+          llvm::StructType::get(
+              elementType->getContext(),
+              {
+                  llvm::IntegerType::getInt64Ty(elementType->getContext()),
+                  llvm::ArrayType::get(elementType, 0)
+              },
+              false
+          ),
+          PtrAddressSpace::Volatile
+      );
+    }
+
+    llvm::Value *Type::getArrayElementPtr(llvm::IRBuilder<> &builder, llvm::Value *arrStruct, llvm::Value *index) {
+      auto zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(arrStruct->getContext()), 0);
+      auto one = llvm::ConstantInt::get(llvm::Type::getInt32Ty(arrStruct->getContext()), 1);
+      auto arrPtr = builder.CreateGEP(arrStruct, {zero, one}, "");
+      return builder.CreateGEP(arrPtr, {zero, index}, "");
+    }
+
+    llvm::Value *Type::createArrayByAlloca(llvm::IRBuilder<> &builder, llvm::PointerType *arrPtrType, llvm::Value *len) {
+      auto structType = reinterpret_cast<llvm::StructType *>(arrPtrType->getElementType());
+      auto realArrayType = reinterpret_cast<llvm::ArrayType *>(structType->getElementType(1));
+      auto lenSize = reinterpret_cast<llvm::ArrayType *>(structType->getElementType(0))->getPrimitiveSizeInBits() / 8;
+      auto elementSize = realArrayType->getElementType()->getPrimitiveSizeInBits() / 8;
+
+      auto totalLen = Type::sizeOfArray(builder, arrPtrType, len);
+
+      return builder.CreatePointerCast(
+          builder.CreateAlloca(llvm::IntegerType::getInt8Ty(builder.getContext()), totalLen),
+          arrPtrType
+      );
+    }
+
+    Type::Type(shared_ptr<Symbol> symbol, int attrs, llvm::Type *llvmType, shared_ptr<Exp> arraySizeVal) :symbol(std::move(symbol)), attrs(attrs), llvmType(llvmType), arraySizeVal(arraySizeVal) {
+      if (arraySizeVal != nullptr) {
+        appendChild(arraySizeVal);
+      }
+    }
+
+    llvm::Value *Type::getArraySizeVal() const { return this->arraySizeVal->getVR().value; }
+
+    Type::Type(const sp<Type> &originalType, int attrs, shared_ptr<Exp> arraySizeVal) :originalType(originalType), attrs(attrs), arraySizeVal(arraySizeVal) {
+      if (originalType == nullptr) {
+        std::cerr << "originalType == nullptr" << std::endl;
+        abort();
+      }
+      appendChild(this->originalType);
+      if (arraySizeVal) {
+        appendChild(arraySizeVal);
       }
     }
 
@@ -555,7 +633,7 @@ namespace al {
     }
 
     void ExpStackVarDef::postVisit(CompileTime &ct) {
-      auto vr = this->exp->getVR();
+      auto expVr = this->exp->getVR();
       auto &cc = ct.getCompilerContext();
       auto type = this->decl->getType();
       auto llvmType = type->getLlvmType();
@@ -568,7 +646,16 @@ namespace al {
         );
         var = ct.createGetMemNvmVar(varName);
       } else {
-        var = cc.builder->CreateAlloca(llvmType);
+        // TODO: generalize array definition
+        if (type->getAttrs() & Type::Array) {
+          var = type->createArrayByAlloca(
+              *ct.getCompilerContext().builder,
+              reinterpret_cast<llvm::PointerType*>(type->getLlvmType()),
+              type->getArraySizeVal()
+          );
+        } else {
+          var = cc.builder->CreateAlloca(llvmType);
+        }
         ct.setFunctionStackVariable(
             ct.getCompilerContext().function->getName(),
             this->decl->getName(),
@@ -578,8 +665,8 @@ namespace al {
       ct.createAssignment(
           llvmType,
           var,
-          vr.value,
-          vr.gepResult
+          expVr.value,
+          expVr.gepResult
       );
     }
 
