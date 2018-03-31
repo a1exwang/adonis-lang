@@ -169,7 +169,12 @@ namespace al {
       auto arrayElementSize = arrayElementType->getPrimitiveSizeInBits() / 8;
 
       return builder.CreateAdd(
-          builder.CreateMul(len, llvm::ConstantInt::get(llvm::Type::getInt64Ty(arrayPtrType->getContext()), arrayElementSize)),
+          builder.CreateMul(
+              builder.CreateZExt(
+                  len,
+                  llvm::IntegerType::getInt64Ty(builder.getContext())
+              ),
+              llvm::ConstantInt::get(llvm::Type::getInt64Ty(arrayPtrType->getContext()), arrayElementSize)),
           lenSize
       );
     }
@@ -235,16 +240,15 @@ namespace al {
     }
 
     void Type::arrayCopy(IRBuilder<> &builder, llvm::Value *dst, llvm::Value *src) {
-      llvm::Value *n = Type::ptrToElementCountOfArray(builder, dst);
+      llvm::Value *n = Type::getDataSizeOfArray(builder, dst);
       llvm::Value *dstData = Type::dataPtrOfArray(builder, dst);
       llvm::Value *srcData = Type::dataPtrOfArray(builder, src);
 
       builder.CreateMemCpy(
           dstData,
           srcData,
-//          builder.CreateLoad(n),
-          llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(builder.getContext()), 1),
-          8
+          n,
+          1
       );
     }
 
@@ -266,6 +270,26 @@ namespace al {
               llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(builder.getContext()), 0),
               llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(builder.getContext()), 1)
           }
+      );
+    }
+
+    llvm::Value *Type::getDataSizeOfArray(llvm::IRBuilder<> &builder, llvm::Value *arr) {
+      auto elementType = reinterpret_cast<ArrayType*>(builder.CreateGEP(arr, {
+          llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(builder.getContext()), 0),
+          llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(builder.getContext()), 1)
+      })->getType()->getPointerElementType())->getElementType();
+      auto n = builder.CreateLoad(
+          builder.CreateGEP(arr, {
+              llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(builder.getContext()), 0),
+              llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(builder.getContext()), 0)
+          })
+      );
+
+      return builder.CreateMul(
+          builder.CreateZExt(n, llvm::IntegerType::getInt64Ty(builder.getContext())),
+          llvm::ConstantInt::get(
+              llvm::IntegerType::getInt64Ty(builder.getContext()),
+              elementType->getPrimitiveSizeInBits() / 8)
       );
     }
 
@@ -689,6 +713,13 @@ namespace al {
               *ct.getCompilerContext().builder,
               reinterpret_cast<llvm::PointerType*>(type->getLlvmType()),
               type->getArraySizeVal()
+          );
+          ct.getCompilerContext().builder->CreateStore(
+              ct.getCompilerContext().builder->CreateZExt(
+                  type->getArraySizeVal(),
+                  llvm::IntegerType::getInt64Ty(ct.getContext())
+              ),
+              Type::ptrToElementCountOfArray(*ct.getCompilerContext().builder, var)
           );
         } else {
           var = cc.builder->CreateAlloca(llvmType);

@@ -11,7 +11,7 @@ FIND_PACKAGE(BISON REQUIRED)
 bison_target(parser parser.y ${CMAKE_CURRENT_SOURCE_DIR}/parser.tab.cpp)
 
 # LLVM
-set(LLVM_DIR "../llvm-5.0.0.src/build/lib/cmake/llvm")
+set(LLVM_DIR "../llvm-5.0.0.src/build-debug/lib/cmake/llvm")
 
 find_package(LLVM REQUIRED CONFIG)
 

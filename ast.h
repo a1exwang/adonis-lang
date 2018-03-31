@@ -208,6 +208,7 @@ namespace al {
 
       static llvm::PointerType *getArrayPtrType(llvm::Type *elementType);
       static llvm::Value *ptrToElementCountOfArray(llvm::IRBuilder<> &builder, llvm::Value *arr);
+      static llvm::Value *getDataSizeOfArray(llvm::IRBuilder<> &builder, llvm::Value *arr);
       static llvm::Value *dataPtrOfArray(llvm::IRBuilder<> &builder, llvm::Value *arr);
       static llvm::Value *sizeOfArray(llvm::IRBuilder<> &builder, llvm::PointerType *arrayPtrType, llvm::Value *len);
       static void arrayCopy(llvm::IRBuilder<> &builder, llvm::Value *dst, llvm::Value *src);
