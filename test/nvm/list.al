@@ -29,7 +29,7 @@ fn traverseList(head: *Node) int32 {
     if (node != head) {
       a = 2;
     } else {
-      return (sum);
+      break;
     };
   };
 

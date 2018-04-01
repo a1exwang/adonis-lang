@@ -45,7 +45,7 @@
 %define parse.trace
 %define parse.error verbose
 
-%token FN FOR IF ELSE STRUCT PERSISTENT EXTERN VOLATILE SIZEOF RETURN
+%token FN FOR IF ELSE STRUCT PERSISTENT EXTERN VOLATILE SIZEOF RETURN BREAK
 %token SEMICOLON ";";
 %token COLON COMMA BANG AT OP_MOVE
 %token QUOTE "'";
@@ -95,6 +95,7 @@
 %type< std::shared_ptr<al::ast::ExpDeref> > exp_deref;
 %type< std::shared_ptr<al::ast::ExpGetAddr> > exp_get_addr;
 %type< std::shared_ptr<al::ast::ExpReturn> > exp_return;
+%type< std::shared_ptr<al::ast::ExpBreak> > exp_break;
 %type< std::shared_ptr<al::ast::ExpVolatileCast> > exp_volatile_cast;
 %type< std::shared_ptr<al::ast::ExpFor> > exp_for;
 %type< std::shared_ptr<al::ast::ExpIf> > exp_if;
@@ -190,6 +191,7 @@ exp:  exp_call { $$ = $1; }
     | exp_get_addr { $$ = $1; }
     | exp_deref { $$ = $1; }
     | exp_return { $$ = $1; }
+    | exp_break { $$ = $1; }
     | LEFTPAR exp RIGHTPAR { $$ = $2; }
     | exp_volatile_cast { $$ = $1; }
     | exp_for { $$ = $1; }
@@ -231,6 +233,7 @@ exp_deref: STAR exp { $$ = std::make_shared<al::ast::ExpDeref>($2); }
 exp_volatile_cast: VOLATILE LEFTPAR exp RIGHTPAR { $$ = std::make_shared<al::ast::ExpVolatileCast>($3); }
 exp_return: RETURN { $$ = std::make_shared<al::ast::ExpReturn>(); }
     | RETURN LEFTPAR exp RIGHTPAR { $$ = std::make_shared<al::ast::ExpReturn>($3); }
+exp_break: BREAK { $$ = std::make_shared<al::ast::ExpBreak>(); }
 
 exp_for: FOR exp SEMICOLON exp SEMICOLON exp stmt_block {
       $$ = std::make_shared<al::ast::ExpFor>($2, $4, $6, $7);

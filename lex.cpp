@@ -170,8 +170,13 @@ al::Parser::symbol_type al::Lexer::lex() {
             return Parser::make_DOT(Parser::location_type());
           }
       },
-
       // Keywords
+      {
+          "break",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_BREAK(Parser::location_type());
+          }
+      },
       {
           "else",
           [](const std::string &s) -> Parser::symbol_type {

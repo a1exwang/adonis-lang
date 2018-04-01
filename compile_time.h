@@ -52,12 +52,20 @@ namespace al {
 
   struct CompilerContext {
   public:
-    CompilerContext(llvm::LLVMContext &c, llvm::Function *function, llvm::BasicBlock *bb, std::shared_ptr<ast::Annotation> annotation = nullptr)
-        :basicBlock(bb), function(function), builder(new llvm::IRBuilder<>(c)), annotation(annotation)
-    { builder->SetInsertPoint(bb); }
+    CompilerContext(
+        llvm::LLVMContext &c,
+        llvm::Function *function,
+        llvm::BasicBlock *bb,
+        llvm::BasicBlock *breakToBlock,
+        std::shared_ptr<ast::Annotation> annotation = nullptr
+    ) :basicBlock(bb), breakToBlock(breakToBlock), function(function), builder(new llvm::IRBuilder<>(c)), annotation(annotation){
+      builder->SetInsertPoint(bb);
+    }
+
     CompilerContext(const CompilerContext &cc)
-        :basicBlock(cc.basicBlock), function(cc.function), builder(cc.builder), annotation(cc.annotation) {}
+        :basicBlock(cc.basicBlock), breakToBlock(cc.breakToBlock), function(cc.function), builder(cc.builder), annotation(cc.annotation) {}
     llvm::BasicBlock *basicBlock;
+    llvm::BasicBlock *breakToBlock;
     llvm::Function *function;
     std::shared_ptr<llvm::IRBuilder<>> builder;
     std::shared_ptr<ast::Annotation> annotation;

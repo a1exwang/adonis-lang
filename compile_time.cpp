@@ -327,20 +327,18 @@ void al::CompileTime::createAssignment(
     llvm::Value *persistNvm,
     bool isArray
 ) {
-  auto builder = getCompilerContext().builder;
-
   if (isArray) {
     // Array copy for arrays
-    ast::Type::arrayCopy(*getMainModule(), *builder, lhsPtr, rhsPtr);
+    ast::Type::arrayCopy(*getMainModule(), *getCompilerContext().builder, lhsPtr, rhsPtr);
   } else {
     if (elementType->isIntegerTy(32) ||
         elementType->isPointerTy() ||
         elementType->isStructTy()) {
       auto a = static_cast<llvm::PointerType*>(lhsPtr->getType());
       auto vPtr = llvm::PointerType::get(a->getElementType(), PtrAddressSpace::Volatile);
-      auto lhsNewPtr = builder->CreatePointerCast(lhsPtr, vPtr);
+      auto lhsNewPtr = getCompilerContext().builder->CreatePointerCast(lhsPtr, vPtr);
 
-      builder->CreateStore(rhsVal, lhsNewPtr);
+      getCompilerContext().builder->CreateStore(rhsVal, lhsNewPtr);
     }
     else {
       cerr << "type not supported" << endl;
@@ -355,7 +353,7 @@ void al::CompileTime::createAssignment(
     }
       createCommitPersistentVarIfOk(
           lhsPtr,
-          getTypeSize(*builder, elementType),
+          getTypeSize(*getCompilerContext().builder, elementType),
           persistNvm
       );
 //    }

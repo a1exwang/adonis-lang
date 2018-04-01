@@ -381,7 +381,7 @@ namespace al {
         );
       }
 
-      CompilerContext cc(ct.getContext(), fn, BasicBlock::Create(ct.getContext(), "entry", fn));
+      CompilerContext cc(ct.getContext(), fn, BasicBlock::Create(ct.getContext(), "entry", fn), nullptr);
       ct.pushContext(cc);
 
       int i = 0;
@@ -516,7 +516,6 @@ namespace al {
     }
 
     void ExpMemberAccess::postVisit(CompileTime &ct) {
-      auto &builder = *ct.getCompilerContext().builder;
       auto lhsPtr = obj->getVR().gepResult;
       if (lhsPtr == nullptr) {
         cerr << "lhs is not a valid struct obj" << endl;
@@ -536,7 +535,7 @@ namespace al {
           cerr << "object member does not exist '" << member->getName() << "'" << endl;
           abort();
         }
-        auto structPtr = builder.CreatePointerCast(
+        auto structPtr = ct.getCompilerContext().builder->CreatePointerCast(
             lhsPtr, llvm::PointerType::get(
                 structType,
                 static_cast<llvm::PointerType*>(lhsPtr->getType())->getAddressSpace())
@@ -550,11 +549,11 @@ namespace al {
         // TODO Add more types
         auto elementType = structAstType->getLlvmType()->getStructElementType(idx);
         if (elementType->isIntegerTy(32) || elementType->isPointerTy()) {
-          vr.gepResult = builder.CreatePointerBitCastOrAddrSpaceCast(
+          vr.gepResult = ct.getCompilerContext().builder->CreatePointerBitCastOrAddrSpaceCast(
               elementPtr,
               llvm::PointerType::get(elementType, structAstType->isPersistent() ? PtrAddressSpace::NVM : PtrAddressSpace::Volatile)
           );
-          vr.value = builder.CreateLoad(vr.gepResult);
+          vr.value = ct.getCompilerContext().builder->CreateLoad(vr.gepResult);
         }
         else {
           cerr << "memberAccess element type not supported " << structAstType->getMembers()[idx] << endl;
@@ -829,16 +828,15 @@ namespace al {
 
         auto function = ct.getCompilerContext().function;
 
-        auto judgementBlock = BasicBlock::Create(ct.getContext(), "", function);
+        auto judgementBlock = BasicBlock::Create(ct.getContext(), "for_judgement", function);
+        auto bodyBlock = BasicBlock::Create(ct.getContext(), "for_body", function);
+        auto doneBlock = BasicBlock::Create(ct.getContext(), "for_done", function);
 
         ct.getCompilerContext().builder->CreateBr(judgementBlock);
 
-        CompilerContext judgementCt(ct.getContext(), function, judgementBlock, this->annotation);
+        CompilerContext judgementCt(ct.getContext(), function, judgementBlock, doneBlock, this->annotation);
         ct.popContext();
         ct.pushContext(judgementCt);
-
-        auto bodyBlock = BasicBlock::Create(ct.getContext(), "", function);
-        auto nextBlock = BasicBlock::Create(ct.getContext(), "", function);
 
         auto judgeResult = this->judgementExp->visit(ct);
         auto isFalse = ct.getCompilerContext().builder->CreateICmp(
@@ -848,11 +846,11 @@ namespace al {
         );
         ct.getCompilerContext().builder->CreateCondBr(
             isFalse,
-            nextBlock,
+            doneBlock,
             bodyBlock
         );
 
-        CompilerContext bodyCt(ct.getContext(), function, bodyBlock, this->annotation);
+        CompilerContext bodyCt(ct.getContext(), function, bodyBlock, doneBlock, this->annotation);
         ct.popContext();
         ct.pushContext(bodyCt);
 
@@ -886,7 +884,11 @@ namespace al {
 
         ct.getCompilerContext().builder->CreateBr(judgementBlock);
 
-        CompilerContext nextCt(ct.getContext(), function, nextBlock, this->annotation);
+        auto nextBlock = BasicBlock::Create(ct.getContext(), "for_next", function);
+        llvm::IRBuilder<> doneBlockBuilder(doneBlock);
+        doneBlockBuilder.CreateBr(nextBlock);
+
+        CompilerContext nextCt(ct.getContext(), function, nextBlock, nullptr, this->annotation);
         ct.popContext();
         ct.pushContext(nextCt);
 
@@ -898,16 +900,15 @@ namespace al {
 
         auto function = ct.getCompilerContext().function;
 
-        auto judgementBlock = BasicBlock::Create(ct.getContext(), "", function);
+        auto judgementBlock = BasicBlock::Create(ct.getContext(), "for_judgement", function);
+        auto bodyBlock = BasicBlock::Create(ct.getContext(), "for_body", function);
+        auto doneBlock = BasicBlock::Create(ct.getContext(), "for_done", function);
 
         ct.getCompilerContext().builder->CreateBr(judgementBlock);
 
-        CompilerContext judgementCt(ct.getContext(), function, judgementBlock, outerAnnotation);
+        CompilerContext judgementCt(ct.getContext(), function, judgementBlock, doneBlock, outerAnnotation);
         ct.popContext();
         ct.pushContext(judgementCt);
-
-        auto bodyBlock = BasicBlock::Create(ct.getContext(), "", function);
-        auto nextBlock = BasicBlock::Create(ct.getContext(), "", function);
 
         auto judgeResult = this->judgementExp->visit(ct);
         auto isFalse = ct.getCompilerContext().builder->CreateICmp(
@@ -917,18 +918,22 @@ namespace al {
         );
         ct.getCompilerContext().builder->CreateCondBr(
             isFalse,
-            nextBlock,
+            doneBlock,
             bodyBlock
         );
 
-        CompilerContext bodyCt(ct.getContext(), function, bodyBlock, outerAnnotation);
+        CompilerContext bodyCt(ct.getContext(), function, bodyBlock, doneBlock, outerAnnotation);
         ct.popContext();
         ct.pushContext(bodyCt);
         this->body->visit(ct);
         this->tailExp->visit(ct);
         ct.getCompilerContext().builder->CreateBr(judgementBlock);
 
-        CompilerContext nextCt(ct.getContext(), function, nextBlock, outerAnnotation);
+        auto nextBlock = BasicBlock::Create(ct.getContext(), "for_next", function);
+        llvm::IRBuilder<> doneBlockBuilder(doneBlock);
+        doneBlockBuilder.CreateBr(nextBlock);
+
+        CompilerContext nextCt(ct.getContext(), function, nextBlock, nullptr, this->annotation);
         ct.popContext();
         ct.pushContext(nextCt);
 
@@ -953,10 +958,11 @@ namespace al {
 
       auto function = ct.getCompilerContext().function;
       auto outerAnnotation = ct.getCompilerContext().annotation;
+      auto breakToBlock = ct.getCompilerContext().breakToBlock;
 
-      auto trueBlock = BasicBlock::Create(ct.getContext(), "true", function);
-      auto falseBlock = BasicBlock::Create(ct.getContext(), "false", function);
-      auto nextBlock = BasicBlock::Create(ct.getContext(), "next", function);
+      auto trueBlock = BasicBlock::Create(ct.getContext(), "if_true", function);
+      auto falseBlock = BasicBlock::Create(ct.getContext(), "if_false", function);
+      auto nextBlock = BasicBlock::Create(ct.getContext(), "if_next", function);
 
       auto isFalse = ct.getCompilerContext().builder->CreateICmp(
           llvm::CmpInst::Predicate::ICMP_EQ,
@@ -969,21 +975,21 @@ namespace al {
           trueBlock
       );
 
-      CompilerContext trueCt(ct.getContext(), function, trueBlock, outerAnnotation);
+      CompilerContext trueCt(ct.getContext(), function, trueBlock, breakToBlock, outerAnnotation);
       ct.popContext();
       ct.pushContext(trueCt);
 
       this->trueBranch->visit(ct);
       ct.getCompilerContext().builder->CreateBr(nextBlock);
 
-      CompilerContext falseCt(ct.getContext(), function, falseBlock, outerAnnotation);
+      CompilerContext falseCt(ct.getContext(), function, falseBlock, breakToBlock, outerAnnotation);
       ct.popContext();
       ct.pushContext(falseCt);
 
       this->falseBranch->visit(ct);
       ct.getCompilerContext().builder->CreateBr(nextBlock);
 
-      CompilerContext nextCt(ct.getContext(), function, nextBlock, outerAnnotation);
+      CompilerContext nextCt(ct.getContext(), function, nextBlock, breakToBlock, outerAnnotation);
       ct.popContext();
       ct.pushContext(nextCt);
       return this->vr;
@@ -1082,6 +1088,31 @@ namespace al {
       else {
         ct.getCompilerContext().builder->CreateRetVoid();
       }
+    }
+
+    void ExpBreak::postVisit(CompileTime &ct) {
+      if (!ct.getCompilerContext().breakToBlock) {
+        cerr << "Cannot break without a loop" << endl;
+        abort();
+      }
+
+      auto invalidBlock = BasicBlock::Create(ct.getContext(), "break_useless", ct.getCompilerContext().function);
+
+      ct.getCompilerContext().builder->CreateCondBr(
+          llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(ct.getContext()), 1),
+          ct.getCompilerContext().breakToBlock,
+          invalidBlock
+      );
+
+      CompilerContext invalidCt(
+          ct.getContext(),
+          ct.getCompilerContext().function,
+          invalidBlock,
+          nullptr,
+          ct.getCompilerContext().annotation
+      );
+      ct.popContext();
+      ct.pushContext(invalidCt);
     }
   }
 }

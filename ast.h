@@ -375,6 +375,11 @@ namespace al {
     private:
       sp<Exp> exp;
     };
+    class ExpBreak :public Exp {
+    public:
+      ExpBreak() { }
+      void postVisit(CompileTime &ct) override;
+    };
 
     class ExpList :public ASTNode {
     public:
