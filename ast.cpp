@@ -105,7 +105,7 @@ namespace al {
     Type::Type(sp<al::ast::VarDecls> args,
                sp<al::ast::Type> retType,
                int attrs)
-        :fnTypeArgs(args), attrs(attrs), originalType(retType) {
+        :originalType(retType), attrs(attrs), fnTypeArgs(args) {
       if (fnTypeArgs== nullptr) {
         std::cerr << "fnTypeArgs== nullptr" << std::endl;
         abort();
@@ -207,11 +207,6 @@ namespace al {
     }
 
     llvm::Value *Type::createArrayByAlloca(llvm::IRBuilder<> &builder, llvm::PointerType *arrPtrType, llvm::Value *len) {
-      auto structType = reinterpret_cast<llvm::StructType *>(arrPtrType->getElementType());
-      auto realArrayType = reinterpret_cast<llvm::ArrayType *>(structType->getElementType(1));
-      auto lenSize = reinterpret_cast<llvm::ArrayType *>(structType->getElementType(0))->getPrimitiveSizeInBits() / 8;
-      auto elementSize = realArrayType->getElementType()->getPrimitiveSizeInBits() / 8;
-
       auto totalLen = Type::sizeOfArray(builder, arrPtrType, len);
 
       return builder.CreatePointerCast(
@@ -294,7 +289,7 @@ namespace al {
     }
 
     ExpCall::ExpCall(const std::shared_ptr<Symbol> &name, std::vector<std::shared_ptr<Exp>> exps)
-        :ExpCall(name->getName(), exps) {}
+        :ExpCall(name->getName(), exps) { }
 
     void ExpCall::postVisit(CompileTime &ct) {
       std::vector<llvm::Value*> args;
@@ -319,6 +314,13 @@ namespace al {
             ct.getCompilerContext().builder->CreateICmp(llvm::CmpInst::Predicate::ICMP_SLT,
                                                         args[0],
                                                         args[1]),
+            llvm::IntegerType::getInt32Ty(ct.getContext())
+        );
+      }
+      else if (this->name == "<<") {
+        if (args.size() != 2) { cerr << "'<' only accepts 2 args" << endl; abort(); }
+        vr.value = ct.getCompilerContext().builder->CreateZExt(
+            ct.getCompilerContext().builder->CreateShl(args[0], args[1]),
             llvm::IntegerType::getInt32Ty(ct.getContext())
         );
       }
@@ -445,8 +447,8 @@ namespace al {
     std::string ExpVarRef::getName() const { return name->getName(); }
 
     void ExpVarRef::postTraverse(CompileTime &ct, PersistentVarTaggingPass &pass) {
-//      cout << "ExpVarRef::postTraverse(): name=" << this->getName() << ", isAssign=" << pass.isAssign << endl;
-      if (!pass.isAssign) {
+//      printf("ExpVarRef::postTraverse() %s, %s, %d\n", pass.getFnName().c_str(), this->getName().c_str(), pass.isAssignLhs);
+      if (!pass.isAssignLhs) {
         pass.setPvarTag(pass.getFnName(), this->getName(), PersistentVarTaggingPass::PvarTag::Readable);
       }
     }
@@ -630,6 +632,10 @@ namespace al {
       auto lhsVarRef = dynamic_pointer_cast<ExpVarRef>(exps[0]);
       if (lhsVarRef != nullptr) {
         auto fnName = ct.getCompilerContext().function->getName();
+
+//        cout << "ExpAssign::postVisit() " << string(fnName) << " " << string(lhsVarRef->getName())
+//             << " " << ct.getPvarTagPass().hasPvarTag(fnName, lhsVarRef->getName())
+//             << " " << ct.getPvarTagPass().getPvarTag(fnName, lhsVarRef->getName()) << endl;
         if (ct.getPvarTagPass().hasPvarTag(fnName, lhsVarRef->getName()) &&
             ct.getPvarTagPass().getPvarTag(fnName, lhsVarRef->getName()) != PersistentVarTaggingPass::Readable) {
           // opt it out
@@ -663,12 +669,16 @@ namespace al {
     }
 
     void ExpAssign::traverse(CompileTime &ct, PersistentVarTaggingPass &pass) {
+//      printf("ExpAssign::traverse() \n");
+
       auto &children = this->getChildren();
-      for (int i = 0; children.size(); ++i) {
+      for (int i = 0; i < children.size(); ++i) {
         if (i == 0) {
-          pass.isAssign = true;
+          pass.isAssignLhs = true;
+//          cout << "ExpAssign::traverse() isAssignLhs = true" << endl;
           children[i]->traverse(ct, pass);
-          pass.isAssign = false;
+//          cout << "ExpAssign::traverse() isAssignLhs = false" << endl;
+          pass.isAssignLhs = false;
         } else {
           children[i]->traverse(ct, pass);
         }
@@ -901,13 +911,11 @@ namespace al {
         sp<al::ast::Annotation> annotation)
         :initExp(initExp), judgementExp(judgementExp), tailExp(tailExp), body(body), annotation(annotation)
     {
-      if (annotation) {
-        appendChild(initExp);
-        appendChild(judgementExp);
-        appendChild(tailExp);
-        appendChild(body);
-        appendChild(annotation);
-      }
+      appendChildIfNotNull(annotation);
+      appendChildIfNotNull(initExp);
+      appendChildIfNotNull(judgementExp);
+      appendChildIfNotNull(tailExp);
+      appendChildIfNotNull(body);
     }
 
     int Annotation::getBatchCount() {
@@ -977,7 +985,6 @@ namespace al {
             vr.gepResult,
             nullptr,
             false /* FIXME: assume array element cannot be an array */
-
         );
       }
 

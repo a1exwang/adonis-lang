@@ -55,13 +55,17 @@ namespace al {
         postVisit(rt);
         return genVisitResult(rt);
       }
-      virtual std::vector<std::shared_ptr<ASTNode>> &getChildren() {
+      std::vector<std::shared_ptr<ASTNode>> &getChildren() override {
         return children;
       }
 
 
       void appendChild(const std::shared_ptr<ASTNode> &node) {
         this->children.push_back(node);
+      }
+      void appendChildIfNotNull(const std::shared_ptr<ASTNode> &node) {
+        if (node != nullptr)
+          this->children.push_back(node);
       }
       void prependChild(const std::shared_ptr<ASTNode> &node) {
         this->children.insert(this->children.begin(), node);
@@ -245,7 +249,7 @@ namespace al {
 
     class FnDef :public Block {
     public:
-      FnDef(sp<FnDecl> decl, sp<StmtBlock> stmtBlock) :decl(std::move(decl)) {
+      FnDef(sp<FnDecl> decl, const sp<StmtBlock> &stmtBlock) :decl(std::move(decl)) {
         appendChild(stmtBlock);
       }
 
@@ -274,6 +278,7 @@ namespace al {
       }
       ExpCall(const std::shared_ptr<Symbol> &name, std::vector<std::shared_ptr<Exp>> exps);
       void postVisit(CompileTime &ct) override;
+//      void preTraverse(CompileTime &ct, PersistentVarTaggingPass &pass) override { printf("ExpCall::preTraverse() \n"); }
 
     private:
       std::string name;
@@ -381,6 +386,7 @@ namespace al {
       ExpFor(sp<Exp> initExp, sp<Exp> judgementExp, sp<Exp> tailExp, sp<StmtBlock> body, sp<Annotation> annotation = nullptr);
 
       VisitResult visit(CompileTime &ct) override;
+//      void preTraverse(CompileTime &ct, PersistentVarTaggingPass &pass) override { printf("ExpFor::preTraverse() \n"); }
     private:
       sp<Exp> initExp;
       sp<Exp> judgementExp;

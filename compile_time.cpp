@@ -36,7 +36,7 @@ void al::CompileTime::setupMainModule() {
 
 }
 
-al::CompileTime::CompileTime() :theContext(), strCounter(0), pvarTag(make_unique<PersistentVarTaggingPass>()) {
+al::CompileTime::CompileTime() :theContext(), pvarTag(make_unique<PersistentVarTaggingPass>()) {
 }
 
 llvm::Module* al::CompileTime::getMainModule() const { return mainModule.get(); }
@@ -309,11 +309,12 @@ void al::CompileTime::createCommitPersistentVarIfOk(llvm::Value *nvmPtr, llvm::V
       )
   );
 
+  auto l = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(theContext), 1);
   getCompilerContext().builder->CreateCall(
       fn, {
           getCompilerContext().builder->CreatePointerCast(nvmPtr, Type::getInt32PtrTy(theContext)),
           size,
-          ok,
+          ok == nullptr ? l : ok,
       }
   );
 }
@@ -347,13 +348,17 @@ void al::CompileTime::createAssignment(
       abort();
     }
 
-    if (persistNvm && lhsPtr->getType()->getPointerAddressSpace() == PtrAddressSpace::NVM) {
+    // TODO: fix this
+//    if (persistNvm && lhsPtr->getType()->getPointerAddressSpace() == PtrAddressSpace::NVM) {
+    if (persistNvm == nullptr) {
+      persistNvm = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(getContext()), 1);
+    }
       createCommitPersistentVarIfOk(
           lhsPtr,
           getTypeSize(*builder, elementType),
           persistNvm
       );
-    }
+//    }
   }
 }
 

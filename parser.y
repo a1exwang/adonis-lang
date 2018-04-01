@@ -196,10 +196,13 @@ exp_call: SYMBOL_LIT LEFTPAR exps RIGHTPAR {
       $$ = std::make_shared<al::ast::ExpCall>($1, std::vector<std::shared_ptr<al::ast::Exp>>());
     }
 exp_op: exp PLUS exp {
-      $$ = std::make_shared<al::ast::ExpCall>("+", std::vector<std::shared_ptr<al::ast::Exp>>({$1, $3}));
+        $$ = std::make_shared<al::ast::ExpCall>("+", std::vector<std::shared_ptr<al::ast::Exp>>({$1, $3}));
       }
     | exp LT exp {
-      $$ = std::make_shared<al::ast::ExpCall>("<", std::vector<std::shared_ptr<al::ast::Exp>>({$1, $3}));
+        $$ = std::make_shared<al::ast::ExpCall>("<", std::vector<std::shared_ptr<al::ast::Exp>>({$1, $3}));
+      }
+    | exp LT LT exp {
+        $$ = std::make_shared<al::ast::ExpCall>("<<", std::vector<std::shared_ptr<al::ast::Exp>>({$1, $4}));
       }
 exp_assign: exp EQ exp { $$ = std::make_shared<al::ast::ExpAssign>($1, $3); }
 exp_move: exp_var_ref OP_MOVE exp_var_ref { $$ = std::make_shared<al::ast::ExpMove>($1, $3); }

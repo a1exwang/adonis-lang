@@ -26,5 +26,5 @@ struct PersistentVarTaggingPass {
   }
 
   std::map<std::string, int> pvarTags;
-  bool isAssign = false;
+  bool isAssignLhs = false;
 };

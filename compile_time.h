@@ -56,7 +56,7 @@ namespace al {
         :basicBlock(bb), function(function), builder(new llvm::IRBuilder<>(c)), annotation(annotation)
     { builder->SetInsertPoint(bb); }
     CompilerContext(const CompilerContext &cc)
-        :basicBlock(cc.basicBlock), builder(cc.builder), function(cc.function), annotation(cc.annotation) {}
+        :basicBlock(cc.basicBlock), function(cc.function), builder(cc.builder), annotation(cc.annotation) {}
     llvm::BasicBlock *basicBlock;
     llvm::Function *function;
     std::shared_ptr<llvm::IRBuilder<>> builder;
@@ -142,7 +142,6 @@ namespace al {
     std::unique_ptr<llvm::Module> mainModule;
 
     std::vector<llvm::BasicBlock*> currentBlocks;
-    int strCounter;
 
     std::vector<CompilerContext> compilerContextStack;
     std::map<std::string, std::shared_ptr<ast::Type>> typeTable;
