@@ -396,7 +396,9 @@ namespace al {
         child->visit(ct);
       }
 
-      ct.getCompilerContext().builder->CreateRet(nullptr);
+      if (fn->getReturnType()->isVoidTy()) {
+        ct.getCompilerContext().builder->CreateRetVoid();
+      }
 //      if (!verifyFunction(*ct.getCompilerContext().function)) {
 //        cout << "failed to verifyFunction " << ct.getCompilerContext().function->getName().str() << endl;
 //      }
@@ -1072,6 +1074,15 @@ namespace al {
       vr.value = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(ct.getContext()), this->size);
     }
 
+    void ExpReturn::postVisit(CompileTime &ct) {
+      // FIXME: llvm only support return at the end of a function
+      if (exp) {
+        ct.getCompilerContext().builder->CreateRet(exp->getVR().value);
+      }
+      else {
+        ct.getCompilerContext().builder->CreateRetVoid();
+      }
+    }
   }
 }
 

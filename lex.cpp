@@ -209,6 +209,12 @@ al::Parser::symbol_type al::Lexer::lex() {
           }
       },
       {
+          "return",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_RETURN(Parser::location_type());
+          }
+      },
+      {
           "sizeof",
           [](const std::string &s) -> Parser::symbol_type {
             return Parser::make_SIZEOF(Parser::location_type());

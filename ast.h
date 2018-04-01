@@ -368,6 +368,13 @@ namespace al {
       explicit ExpVolatileCast(sp<Exp> exp) { appendChild(exp); }
       void postVisit(CompileTime &ct) override;
     };
+    class ExpReturn :public Exp {
+    public:
+      ExpReturn(sp<Exp> exp = nullptr) :exp(exp) { appendChildIfNotNull(exp); }
+      void postVisit(CompileTime &ct) override;
+    private:
+      sp<Exp> exp;
+    };
 
     class ExpList :public ASTNode {
     public:

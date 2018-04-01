@@ -18,10 +18,22 @@ persistent {
   root: Node
 }
 
-fn traverseList(head: *Node) {
-  for node: *Node = head; node != head; node = volatile((*node).next) {
+fn traverseList(head: *Node) int32 {
+  a: int32 = 0;
+  sum: int32 = 0;
+  for node: *Node = head; sum != 1; a = 1 {
     putsInt((*node).data);
+    sum = sum + (*node).data;
+
+    node = volatile((*node).next);
+    if (node != head) {
+      a = 2;
+    } else {
+      return (sum);
+    };
   };
+
+  return (sum);
 }
 
 fn AL__main() void {
@@ -29,6 +41,6 @@ fn AL__main() void {
   nvAllocNBytes(&tmp, sizeof(Node));
   root.next = tmp;
   (*tmp).data = 1;
-
-
+  (*tmp).next = &root;
+  traverseList(volatile(&root));
 }
