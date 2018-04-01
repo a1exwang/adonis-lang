@@ -124,21 +124,17 @@ namespace al {
           this->llvmType = ct.getType(this->symbol->getName())->getLlvmType();
         } else if (this->attrs & Ptr) {
           this->originalType->parseLlvmType(ct);
-          this->llvmType = llvm::PointerType::get(this->originalType->getLlvmType(), PtrAddressSpace::Volatile);
+          this->llvmType = llvm::PointerType::get(
+              this->originalType->getLlvmType(),
+              (this->originalType->attrs & Persistent) ? PtrAddressSpace::NVM : PtrAddressSpace::Volatile
+          );
         } else if (this->attrs & Array) {
           this->originalType->parseLlvmType(ct);
           this->llvmType = this->getArrayPtrType(this->originalType->getLlvmType());
         } else if (this->attrs & Persistent) {
           this->originalType->parseLlvmType(ct);
-          if ((this->originalType->attrs & Ptr) || (this->originalType->attrs & Array)) {
-            this->llvmType = llvm::PointerType::get(
-                ((llvm::PointerType*)this->originalType->getLlvmType())->getPointerElementType(),
-                PtrAddressSpace::NVM
-            );
-          } else {
-            this->bPersistent = true;
-            this->llvmType = this->originalType->getLlvmType();
-          }
+          this->bPersistent = true;
+          this->llvmType = this->originalType->getLlvmType();
         } else if (this->attrs & Fn) {
           std::vector<llvm::Type*> myArgs;
           for (const auto &_arg : getArgs()->getChildren()) {
@@ -159,14 +155,14 @@ namespace al {
       }
     }
 
-    llvm::Value *Type::sizeOfArray(llvm::IRBuilder<> &builder, llvm::PointerType *arrayPtrType, llvm::Value *len) {
+    llvm::Value *Type::sizeOfArray(const llvm::Module &mainModule, llvm::IRBuilder<> &builder, llvm::PointerType *arrayPtrType, llvm::Value *len) {
       auto lenSize = llvm::ConstantInt::get(
           llvm::IntegerType::getInt64Ty(arrayPtrType->getContext()),
-          llvm::IntegerType::getInt64Ty(arrayPtrType->getContext())->getScalarSizeInBits() / 8
+          mainModule.getDataLayout().getTypeAllocSize(llvm::IntegerType::getInt64Ty(arrayPtrType->getContext()))
       );
       auto arrayStructType = reinterpret_cast<llvm::StructType*>(arrayPtrType->getElementType());
       auto arrayElementType = reinterpret_cast<llvm::ArrayType*>(arrayStructType->getElementType(1))->getElementType();
-      auto arrayElementSize = arrayElementType->getPrimitiveSizeInBits() / 8;
+      auto arrayElementSize = mainModule.getDataLayout().getTypeAllocSize(arrayElementType);
 
       return builder.CreateAdd(
           builder.CreateMul(
@@ -206,8 +202,8 @@ namespace al {
       return builder.CreateGEP(arrPtr, {zero, index}, "");
     }
 
-    llvm::Value *Type::createArrayByAlloca(llvm::IRBuilder<> &builder, llvm::PointerType *arrPtrType, llvm::Value *len) {
-      auto totalLen = Type::sizeOfArray(builder, arrPtrType, len);
+    llvm::Value *Type::createArrayByAlloca(const llvm::Module &mainModule, llvm::IRBuilder<> &builder, llvm::PointerType *arrPtrType, llvm::Value *len) {
+      auto totalLen = Type::sizeOfArray(mainModule, builder, arrPtrType, len);
 
       return builder.CreatePointerCast(
           builder.CreateAlloca(llvm::IntegerType::getInt8Ty(builder.getContext()), totalLen),
@@ -234,8 +230,8 @@ namespace al {
       }
     }
 
-    void Type::arrayCopy(IRBuilder<> &builder, llvm::Value *dst, llvm::Value *src) {
-      llvm::Value *n = Type::getDataSizeOfArray(builder, dst);
+    void Type::arrayCopy(const llvm::Module &mainModule, IRBuilder<> &builder, llvm::Value *dst, llvm::Value *src) {
+      llvm::Value *n = Type::getDataSizeOfArray(mainModule, builder, dst);
       llvm::Value *dstData = Type::dataPtrOfArray(builder, dst);
       llvm::Value *srcData = Type::dataPtrOfArray(builder, src);
 
@@ -268,7 +264,7 @@ namespace al {
       );
     }
 
-    llvm::Value *Type::getDataSizeOfArray(llvm::IRBuilder<> &builder, llvm::Value *arr) {
+    llvm::Value *Type::getDataSizeOfArray(const llvm::Module &mainModule, llvm::IRBuilder<> &builder, llvm::Value *arr) {
       auto elementType = reinterpret_cast<ArrayType*>(builder.CreateGEP(arr, {
           llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(builder.getContext()), 0),
           llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(builder.getContext()), 1)
@@ -284,7 +280,7 @@ namespace al {
           builder.CreateZExt(n, llvm::IntegerType::getInt64Ty(builder.getContext())),
           llvm::ConstantInt::get(
               llvm::IntegerType::getInt64Ty(builder.getContext()),
-              elementType->getPrimitiveSizeInBits() / 8)
+              mainModule.getDataLayout().getTypeAllocSize(elementType))
       );
     }
 
@@ -314,6 +310,33 @@ namespace al {
             ct.getCompilerContext().builder->CreateICmp(llvm::CmpInst::Predicate::ICMP_SLT,
                                                         args[0],
                                                         args[1]),
+            llvm::IntegerType::getInt32Ty(ct.getContext())
+        );
+      }
+      else if (this->name == "!=") {
+        if (args.size() != 2) { cerr << "'<' only accepts 2 args" << endl; abort(); }
+
+        llvm::Value *lhsInt = args[0], *rhsInt = args[1];
+        if (args[0]->getType()->isPointerTy()) {
+           lhsInt = ct.getCompilerContext().builder->CreatePtrToInt(
+              args[0],
+              llvm::Type::getInt64Ty(ct.getContext())
+          );
+        }
+        if (args[1]->getType()->isPointerTy()) {
+          rhsInt = ct.getCompilerContext().builder->CreatePtrToInt(
+              args[1],
+              llvm::Type::getInt64Ty(ct.getContext())
+          );
+        }
+        vr.value = ct.getCompilerContext().builder->CreateZExt(
+            ct.getCompilerContext().builder->CreateNot(
+                ct.getCompilerContext().builder->CreateICmp(
+                    llvm::CmpInst::Predicate::ICMP_EQ,
+                    lhsInt,
+                    rhsInt
+                )
+            ),
             llvm::IntegerType::getInt32Ty(ct.getContext())
         );
       }
@@ -523,13 +546,11 @@ namespace al {
              ConstantInt::get(llvm::Type::getInt32Ty(ct.getContext()), idx)}
         );
         // TODO Add more types
-        if (structAstType->getLlvmType()->getStructElementType(idx)->isIntegerTy(32)) {
-          vr.gepResult = builder.CreateBitCast(
+        auto elementType = structAstType->getLlvmType()->getStructElementType(idx);
+        if (elementType->isIntegerTy(32) || elementType->isPointerTy()) {
+          vr.gepResult = builder.CreatePointerBitCastOrAddrSpaceCast(
               elementPtr,
-              llvm::Type::getInt32PtrTy(
-                  ct.getContext(),
-                  static_cast<llvm::PointerType*>(elementPtr->getType())->getAddressSpace()
-              )
+              llvm::PointerType::get(elementType, structAstType->isPersistent() ? PtrAddressSpace::NVM : PtrAddressSpace::Volatile)
           );
           vr.value = builder.CreateLoad(vr.gepResult);
         }
@@ -538,6 +559,18 @@ namespace al {
           abort();
         }
       }
+    }
+
+    void StructBlock::preVisit(CompileTime &ct) {
+      auto name = this->name->getName();
+      auto llvmType = llvm::StructType::create(ct.getContext(), name);
+      vector<string> a;
+      this->type = std::make_shared<ast::Type>(
+          std::make_shared<Symbol>(name.c_str()),
+          llvmType,
+          a
+      );
+      ct.registerType(name, this->type);
     }
 
     void StructBlock::postVisit(CompileTime &ct) {
@@ -552,14 +585,8 @@ namespace al {
         elements.push_back(elementObjType);
         elementNames.push_back(varDecl->getName());
       }
-
-      auto llvmType = llvm::StructType::create(ct.getContext(), elements, name);
-      auto type = std::make_shared<ast::Type>(
-          std::make_shared<Symbol>(name.c_str()),
-          llvmType,
-          elementNames
-      );
-      ct.registerType(name, type);
+      reinterpret_cast<StructType*>(this->type->getLlvmType())->setBody(elements);
+      this->type->setMemberNames(elementNames);
     }
 
     FnDecl::FnDecl(sp<Symbol> name, sp<Type> ret, sp<VarDecls> args) :name(move(name)), ret(ret), args(move(args)) {
@@ -720,6 +747,7 @@ namespace al {
         // TODO: generalize array definition
         if (type->getAttrs() & Type::Array) {
           var = type->createArrayByAlloca(
+              *ct.getMainModule(),
               *ct.getCompilerContext().builder,
               reinterpret_cast<llvm::PointerType*>(type->getLlvmType()),
               type->getArraySizeVal()
@@ -967,6 +995,7 @@ namespace al {
 
       auto arrayElementPtrType = reinterpret_cast<llvm::PointerType*>(this->type->getLlvmType());
       auto arr = Type::createArrayByAlloca(
+          *ct.getMainModule(),
           *ct.getCompilerContext().builder,
           arrayElementPtrType,
           this->type->getArraySizeVal()
@@ -995,6 +1024,11 @@ namespace al {
       auto elementPtr = Type::getArrayElementPtr(*ct.getCompilerContext().builder, arr->getVR().gepResult, this->index->getVR().value);
       this->vr.gepResult = elementPtr;
       this->vr.value = ct.getCompilerContext().builder->CreateLoad(elementPtr);
+    }
+
+    void ExpSizeOf::postVisit(CompileTime &ct) {
+      this->size = ct.getMainModule()->getDataLayout().getTypeAllocSize(type->getLlvmType());
+      vr.value = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(ct.getContext()), this->size);
     }
   }
 }

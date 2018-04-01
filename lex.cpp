@@ -46,6 +46,12 @@ al::Parser::symbol_type al::Lexer::lex() {
           }
       },
       {
+          "\\!=",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_INEQ(Parser::location_type());
+          }
+      },
+      {
           "\\(",
           [](const std::string &s) -> Parser::symbol_type {
             return Parser::make_LEFTPAR(Parser::location_type());
@@ -167,6 +173,12 @@ al::Parser::symbol_type al::Lexer::lex() {
 
       // Keywords
       {
+          "extern",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_EXTERN(Parser::location_type());
+          }
+      },
+      {
           "fn",
           [](const std::string &s) -> Parser::symbol_type {
             return Parser::make_FN(Parser::location_type());
@@ -179,6 +191,18 @@ al::Parser::symbol_type al::Lexer::lex() {
           }
       },
       {
+          "persistent",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_PERSISTENT(Parser::location_type());
+          }
+      },
+      {
+          "sizeof",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_SIZEOF(Parser::location_type());
+          }
+      },
+      {
           "struct",
           [](const std::string &s) -> Parser::symbol_type {
             return Parser::make_STRUCT(Parser::location_type());
@@ -188,18 +212,6 @@ al::Parser::symbol_type al::Lexer::lex() {
           "volatile",
           [](const std::string &s) -> Parser::symbol_type {
             return Parser::make_VOLATILE(Parser::location_type());
-          }
-      },
-      {
-          "persistent",
-          [](const std::string &s) -> Parser::symbol_type {
-            return Parser::make_PERSISTENT(Parser::location_type());
-          }
-      },
-      {
-          "extern",
-          [](const std::string &s) -> Parser::symbol_type {
-            return Parser::make_EXTERN(Parser::location_type());
           }
       },
       // General Tokens

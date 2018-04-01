@@ -45,12 +45,12 @@
 %define parse.trace
 %define parse.error verbose
 
-%token FN FOR STRUCT PERSISTENT EXTERN VOLATILE
+%token FN FOR STRUCT PERSISTENT EXTERN VOLATILE SIZEOF
 %token SEMICOLON ";";
 %token COLON COMMA BANG AT OP_MOVE
 %token QUOTE "'";
 %right RIGHT_ARROW
-%right EQ
+%right EQ INEQ
 %left LT
 %left AND
 %left PLUS
@@ -91,6 +91,7 @@
 %type< std::shared_ptr<al::ast::ExpArrayIndex> > exp_array_index;
 %type< std::shared_ptr<al::ast::Literal> > exp_lit;
 %type< std::shared_ptr<al::ast::ArrayLiteral> > exp_array_lit;
+%type< std::shared_ptr<al::ast::ExpSizeOf> > exp_size_of;
 %type< std::shared_ptr<al::ast::ExpDeref> > exp_deref;
 %type< std::shared_ptr<al::ast::ExpGetAddr> > exp_get_addr;
 %type< std::shared_ptr<al::ast::ExpVolatileCast> > exp_volatile_cast;
@@ -183,6 +184,7 @@ exp: exp_call { $$ = $1; }
     | exp_member { $$ = $1; }
     | exp_array_index { $$ = $1; }
     | exp_lit { $$ = $1; }
+    | exp_size_of { $$ = $1; }
     | exp_get_addr { $$ = $1; }
     | exp_deref { $$ = $1; }
     | LEFTPAR exp RIGHTPAR { $$ = $2; }
@@ -198,6 +200,9 @@ exp_call: SYMBOL_LIT LEFTPAR exps RIGHTPAR {
 exp_op: exp PLUS exp {
         $$ = std::make_shared<al::ast::ExpCall>("+", std::vector<std::shared_ptr<al::ast::Exp>>({$1, $3}));
       }
+    | exp INEQ exp {
+        $$ = std::make_shared<al::ast::ExpCall>("!=", std::vector<std::shared_ptr<al::ast::Exp>>({$1, $3}));
+      }
     | exp LT exp {
         $$ = std::make_shared<al::ast::ExpCall>("<", std::vector<std::shared_ptr<al::ast::Exp>>({$1, $3}));
       }
@@ -209,6 +214,7 @@ exp_move: exp_var_ref OP_MOVE exp_var_ref { $$ = std::make_shared<al::ast::ExpMo
 
 exp_var_ref: SYMBOL_LIT { $$ = std::make_shared<al::ast::ExpVarRef>($1); }
 exp_var_def: var_decl EQ exp { $$ = std::make_shared<al::ast::ExpStackVarDef>($1, $3); }
+exp_size_of: SIZEOF LEFTPAR type RIGHTPAR { $$ = std::make_shared<al::ast::ExpSizeOf>($3); }
 exp_member: exp DOT SYMBOL_LIT { $$ = std::make_shared<al::ast::ExpMemberAccess>($1, $3); }
 exp_lit: INT_LIT { $$ = $1; }
     | exp_array_lit { $$ = $1; }

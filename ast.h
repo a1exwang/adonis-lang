@@ -135,10 +135,12 @@ namespace al {
           :name(std::move(name)), varDecls(varDecls) {
         appendChild(varDecls);
       }
+      void preVisit(CompileTime &ct) override;
       void postVisit(CompileTime &ct) override;
     private:
       sp<Symbol> name;
       sp<VarDecls> varDecls;
+      sp<Type> type;
     };
     class ExternBlock :public Block {
     public:
@@ -212,18 +214,19 @@ namespace al {
 
       static llvm::PointerType *getArrayPtrType(llvm::Type *elementType);
       static llvm::Value *ptrToElementCountOfArray(llvm::IRBuilder<> &builder, llvm::Value *arr);
-      static llvm::Value *getDataSizeOfArray(llvm::IRBuilder<> &builder, llvm::Value *arr);
+      static llvm::Value *getDataSizeOfArray(const llvm::Module &mainModule, llvm::IRBuilder<> &builder, llvm::Value *arr);
       static llvm::Value *dataPtrOfArray(llvm::IRBuilder<> &builder, llvm::Value *arr);
-      static llvm::Value *sizeOfArray(llvm::IRBuilder<> &builder, llvm::PointerType *arrayPtrType, llvm::Value *len);
-      static void arrayCopy(llvm::IRBuilder<> &builder, llvm::Value *dst, llvm::Value *src);
+      static llvm::Value *sizeOfArray(const llvm::Module &mainModule, llvm::IRBuilder<> &builder, llvm::PointerType *arrayPtrType, llvm::Value *len);
+      static void arrayCopy(const llvm::Module &mainModule, llvm::IRBuilder<> &builder, llvm::Value *dst, llvm::Value *src);
       static llvm::Value *getArrayElementPtr(llvm::IRBuilder<> &builder, llvm::Value *arrStruct, llvm::Value *index);
-      static llvm::Value *createArrayByAlloca(llvm::IRBuilder<> &builder, llvm::PointerType *arrPtrType, llvm::Value *len);
+      static llvm::Value *createArrayByAlloca(const llvm::Module &mainModule, llvm::IRBuilder<> &builder, llvm::PointerType *arrPtrType, llvm::Value *len);
 
       void parseLlvmType(CompileTime &ct);
       llvm::Value *getArraySizeVal() const;
 
       void postVisit(CompileTime &ct) override;
       int getAttrs() const { return attrs; }
+      void setMemberNames(const std::vector<std::string> &memberNames) { this->memberNames = memberNames; }
     private:
       sp<Symbol> symbol;
       sp<Type> originalType;
@@ -435,6 +438,14 @@ namespace al {
       sp<Type> getType(CompileTime &ct) override;
     private:
       std::string s;
+    };
+    class ExpSizeOf :public Literal {
+    public:
+      explicit ExpSizeOf(const sp<Type> &type) :type(type) { appendChildIfNotNull(type); }
+      void postVisit(CompileTime &ct) override;
+    private:
+      sp<Type> type;
+      uint64_t size;
     };
     class ArrayLiteral :public Literal {
     public:

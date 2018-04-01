@@ -159,6 +159,14 @@ DLLEXPORT void nvAllocInt32(int **i32) {
   // TODO i32 is a relative pointer, but in al we assure all pointers are absolute pointers
   *i32 = (int*)nvm_abs(*i32);
 }
+DLLEXPORT void nvAllocNBytes(int **i32, uint32_t nBytes) {
+  *i32 = nullptr;
+  auto ptr = nvm_reserve(nBytes);
+  nvm_persist(ptr, nBytes);
+  nvm_activate(ptr, (void **)i32, ptr, nullptr, nullptr);
+  // TODO i32 is a relative pointer, but in al we assure all pointers are absolute pointers
+  *i32 = (int*)nvm_abs(*i32);
+}
 
 DLLEXPORT int thread(void (*thread_fn)(int), int val) {
   std::thread t([&thread_fn, val]() -> void {

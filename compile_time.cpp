@@ -331,7 +331,7 @@ void al::CompileTime::createAssignment(
 
   if (isArray) {
     // Array copy for arrays
-    ast::Type::arrayCopy(*builder, lhsPtr, rhsPtr);
+    ast::Type::arrayCopy(*getMainModule(), *builder, lhsPtr, rhsPtr);
   } else {
     if (elementType->isIntegerTy(32) ||
         elementType->isPointerTy() ||
