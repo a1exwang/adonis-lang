@@ -69,6 +69,12 @@ DLLEXPORT void putsInt(int32_t i) {
   cout << i << endl;
 }
 
+DLLEXPORT int32_t getsInt() {
+  int32_t i;
+  cin >> i;
+  return i;
+}
+
 DLLEXPORT void putsInt8Str(const char *str) {
   cout << str << endl;
 }

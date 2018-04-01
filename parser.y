@@ -45,7 +45,7 @@
 %define parse.trace
 %define parse.error verbose
 
-%token FN FOR STRUCT PERSISTENT EXTERN VOLATILE SIZEOF
+%token FN FOR IF ELSE STRUCT PERSISTENT EXTERN VOLATILE SIZEOF
 %token SEMICOLON ";";
 %token COLON COMMA BANG AT OP_MOVE
 %token QUOTE "'";
@@ -96,6 +96,7 @@
 %type< std::shared_ptr<al::ast::ExpGetAddr> > exp_get_addr;
 %type< std::shared_ptr<al::ast::ExpVolatileCast> > exp_volatile_cast;
 %type< std::shared_ptr<al::ast::ExpFor> > exp_for;
+%type< std::shared_ptr<al::ast::ExpIf> > exp_if;
 
 %type< std::shared_ptr<al::ast::Type> > type;
 %type< std::shared_ptr<al::ast::Annotation> > annotation;
@@ -190,6 +191,7 @@ exp: exp_call { $$ = $1; }
     | LEFTPAR exp RIGHTPAR { $$ = $2; }
     | exp_volatile_cast { $$ = $1; }
     | exp_for { $$ = $1; }
+    | exp_if { $$ = $1; }
 
 exp_call: SYMBOL_LIT LEFTPAR exps RIGHTPAR {
       $$ = std::make_shared<al::ast::ExpCall>($1, $3->toVector());
@@ -232,6 +234,9 @@ exp_for: FOR exp SEMICOLON exp SEMICOLON exp stmt_block {
     | annotation FOR exp SEMICOLON exp SEMICOLON exp stmt_block {
       $$ = std::make_shared<al::ast::ExpFor>($3, $5, $7, $8, $1);
     }
+
+exp_if: IF exp stmt_block ELSE stmt_block { $$ = std::make_shared<ast::ExpIf>($2, $3, $5); }
+    | IF exp stmt_block { $$ = std::make_shared<ast::ExpIf>($2, $3); }
 
 exps: exp { $$ = std::make_shared<al::ast::ExpList>(); $$->prependChild($1); }
     | exp COMMA exps { $$ = $3; $$->prependChild($1); }

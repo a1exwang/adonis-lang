@@ -245,7 +245,7 @@ namespace al {
     };
     class StmtBlock :public ASTNode {
     public:
-      explicit StmtBlock(const std::shared_ptr<Stmts> &stmts) {
+      explicit StmtBlock(const std::shared_ptr<Stmts> &stmts = std::make_shared<Stmts>()) {
         appendChild(stmts);
       }
     };
@@ -396,6 +396,21 @@ namespace al {
       sp<Exp> tailExp;
       sp<StmtBlock> body;
       sp<Annotation> annotation;
+    };
+
+    class ExpIf :public Exp {
+    public:
+      ExpIf(sp<Exp> cond, sp<StmtBlock> trueBranch, sp<StmtBlock> falseBranch = std::make_shared<StmtBlock>())
+          :cond(cond), trueBranch(trueBranch), falseBranch(falseBranch) {
+        appendChildIfNotNull(cond);
+        appendChildIfNotNull(trueBranch);
+        appendChildIfNotNull(falseBranch);
+      }
+      VisitResult visit(CompileTime &ct) override;
+    private:
+      sp<Exp> cond;
+      sp<StmtBlock> trueBranch;
+      sp<StmtBlock> falseBranch;
     };
 
     class Symbol :public Exp {

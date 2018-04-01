@@ -173,6 +173,12 @@ al::Parser::symbol_type al::Lexer::lex() {
 
       // Keywords
       {
+          "else",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_ELSE(Parser::location_type());
+          }
+      },
+      {
           "extern",
           [](const std::string &s) -> Parser::symbol_type {
             return Parser::make_EXTERN(Parser::location_type());
@@ -188,6 +194,12 @@ al::Parser::symbol_type al::Lexer::lex() {
           "for",
           [](const std::string &s) -> Parser::symbol_type {
             return Parser::make_FOR(Parser::location_type());
+          }
+      },
+      {
+          "if",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_IF(Parser::location_type());
           }
       },
       {

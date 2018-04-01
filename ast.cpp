@@ -946,6 +946,47 @@ namespace al {
       appendChildIfNotNull(body);
     }
 
+    VisitResult ExpIf::visit(CompileTime &ct) {
+      auto vr = this->cond->visit(ct);
+
+      auto function = ct.getCompilerContext().function;
+      auto outerAnnotation = ct.getCompilerContext().annotation;
+
+      auto trueBlock = BasicBlock::Create(ct.getContext(), "true", function);
+      auto falseBlock = BasicBlock::Create(ct.getContext(), "false", function);
+      auto nextBlock = BasicBlock::Create(ct.getContext(), "next", function);
+
+      auto isFalse = ct.getCompilerContext().builder->CreateICmp(
+          llvm::CmpInst::Predicate::ICMP_EQ,
+          vr.value,
+          llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(ct.getContext()), 0, true)
+      );
+      ct.getCompilerContext().builder->CreateCondBr(
+          isFalse,
+          falseBlock,
+          trueBlock
+      );
+
+      CompilerContext trueCt(ct.getContext(), function, trueBlock, outerAnnotation);
+      ct.popContext();
+      ct.pushContext(trueCt);
+
+      this->trueBranch->visit(ct);
+      ct.getCompilerContext().builder->CreateBr(nextBlock);
+
+      CompilerContext falseCt(ct.getContext(), function, falseBlock, outerAnnotation);
+      ct.popContext();
+      ct.pushContext(falseCt);
+
+      this->falseBranch->visit(ct);
+      ct.getCompilerContext().builder->CreateBr(nextBlock);
+
+      CompilerContext nextCt(ct.getContext(), function, nextBlock, outerAnnotation);
+      ct.popContext();
+      ct.pushContext(nextCt);
+      return this->vr;
+    }
+
     int Annotation::getBatchCount() {
 //      if (!this->isBatchFor(nvmVarName))
 //        return -1;
@@ -1030,6 +1071,7 @@ namespace al {
       this->size = ct.getMainModule()->getDataLayout().getTypeAllocSize(type->getLlvmType());
       vr.value = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(ct.getContext()), this->size);
     }
+
   }
 }
 
