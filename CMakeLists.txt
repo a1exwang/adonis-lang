@@ -33,10 +33,10 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
 llvm_map_components_to_libnames(llvm_compiler_libs support core irreader)
 llvm_map_components_to_libnames(llvm_interpreter_libs executionengine x86codegen mcjit)
 
-add_executable(alc alc.cpp al.h al.cpp ${BISON_parser_OUTPUTS} lex.cpp lex.h ast.h ast.cpp compile_time.cpp)
+add_executable(alc alc.cpp al.h al.cpp ${BISON_parser_OUTPUTS} lex.cpp lex.h ast.h ast.cpp compile_time.cpp argparser.h)
 target_link_libraries(alc ${llvm_compiler_libs} re2 nvmmalloc)
 
-add_executable(ali ali.cpp al.h al.cpp rt/lib.cpp ${BISON_parser_OUTPUTS} lex.cpp lex.h ast.h ast.cpp compile_time.cpp passes/pv_tagging.h)
+add_executable(ali ali.cpp al.h al.cpp rt/lib.cpp ${BISON_parser_OUTPUTS} lex.cpp lex.h ast.h ast.cpp compile_time.cpp argparser.h passes/pv_tagging.h)
 target_link_libraries(ali alrt ${llvm_compiler_libs} ${llvm_interpreter_libs} re2 nvmmalloc)
 
 add_custom_target(

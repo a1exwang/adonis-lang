@@ -14,20 +14,21 @@
 #include "llvm/Support/TargetSelect.h"
 #include <cstdarg>
 #include <csignal>
+#include <memory>
 
 using namespace llvm;
 using namespace std;
 
-al::CompileTime *compile(int argc, char** argv) {
-  al::CompileTime *rt = new al::CompileTime;
-
-  if (argc != 2) {
+unique_ptr<al::CompileTime> compile(int argc, char** argv) {
+  if (argc < 2) {
     cerr << "wrong arguments" << endl;
     abort();
   }
 
-  ifstream ifs(argv[1]);
+  ifstream ifs(argv[argc - 1]);
   std::string str((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+
+  auto rt = make_unique<al::CompileTime>(argc, argv);
 
   al::Lexer lexer(str);
   al::Parser parser(lexer, *rt);

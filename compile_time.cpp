@@ -21,6 +21,7 @@
 #include <sstream>
 #include "compile_time.h"
 #include <nvm_malloc.h>
+#include "argparser.h"
 
 using namespace llvm;
 using namespace std;
@@ -36,7 +37,10 @@ void al::CompileTime::setupMainModule() {
 
 }
 
-al::CompileTime::CompileTime() :theContext(), pvarTag(make_unique<PersistentVarTaggingPass>()) {
+al::CompileTime::CompileTime(int argc, char **argv)
+    :theContext(),
+     pvarTag(make_unique<PersistentVarTaggingPass>()),
+     config(CompilerConfig::parseFromArgs(argc, argv)) {
 }
 
 llvm::Module* al::CompileTime::getMainModule() const { return mainModule.get(); }
@@ -347,16 +351,19 @@ void al::CompileTime::createAssignment(
     }
 
     // TODO: fix this
-//    if (persistNvm && lhsPtr->getType()->getPointerAddressSpace() == PtrAddressSpace::NVM) {
-    if (persistNvm == nullptr) {
-      persistNvm = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(getContext()), 1);
-    }
+    if (!this->config.enableOptFlushOnlyNvm ||
+        (persistNvm && lhsPtr->getType()->getPointerAddressSpace() == PtrAddressSpace::NVM)) {
+
+//      // TODO: persistNvm is for performance test of batch op
+//      if (persistNvm == nullptr) {
+//        persistNvm = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(getContext()), 1);
+//      }
       createCommitPersistentVarIfOk(
           lhsPtr,
           getTypeSize(*getCompilerContext().builder, elementType),
           persistNvm
       );
-//    }
+    }
   }
 }
 
@@ -401,3 +408,9 @@ void al::CompileTime::unsetFunctionStackVariable(const std::string &functionName
   }
 }
 
+al::CompilerConfig al::CompilerConfig::parseFromArgs(int argc, char **argv) {
+  CompilerConfig config;
+  ArgParser parser(argc, argv);
+  config.enableOptFlushOnlyNvm = parser.getCmdOption("--enable-opt-flush-only-nvm", true);
+  return config;
+}

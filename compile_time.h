@@ -50,6 +50,11 @@ namespace al {
     NVM = 1
   };
 
+  struct CompilerConfig {
+    static CompilerConfig parseFromArgs(int, char **);
+    bool enableOptFlushOnlyNvm = true;
+  };
+
   struct CompilerContext {
   public:
     CompilerContext(
@@ -73,7 +78,7 @@ namespace al {
   };
   class CompileTime {
   public:
-    CompileTime();
+    CompileTime(int argc, char **argv);
     ~CompileTime();
 
     void setASTRoot(std::shared_ptr<ast::ASTNode> root) {
@@ -157,6 +162,8 @@ namespace al {
 
     std::map<std::string, std::map<std::string, llvm::Value*>> functionStackVariables;
     std::unique_ptr<PersistentVarTaggingPass> pvarTag;
+
+    CompilerConfig config;
   };
 
   template<typename T>

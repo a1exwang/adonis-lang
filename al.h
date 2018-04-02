@@ -1,6 +1,9 @@
 #pragma once
 
-#include <llvm/IR/Module.h>
-#include "compile_time.h"
+#include <memory>
 
-al::CompileTime *compile(int argc, char **argv);
+namespace al {
+  class CompileTime;
+}
+
+std::unique_ptr<al::CompileTime> compile(int argc, char **argv);

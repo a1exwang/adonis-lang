@@ -551,7 +551,7 @@ namespace al {
         if (elementType->isIntegerTy(32) || elementType->isPointerTy()) {
           vr.gepResult = ct.getCompilerContext().builder->CreatePointerBitCastOrAddrSpaceCast(
               elementPtr,
-              llvm::PointerType::get(elementType, structAstType->isPersistent() ? PtrAddressSpace::NVM : PtrAddressSpace::Volatile)
+              llvm::PointerType::get(elementType, lhsPtr->getType()->getPointerAddressSpace())
           );
           vr.value = ct.getCompilerContext().builder->CreateLoad(vr.gepResult);
         }
