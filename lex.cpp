@@ -141,6 +141,12 @@ al::Parser::symbol_type al::Lexer::lex() {
           }
       },
       {
+          "\\>",
+          [](const std::string &s) -> Parser::symbol_type {
+            return Parser::make_GT(Parser::location_type());
+          }
+      },
+      {
           "\\*",
           [](const std::string &s) -> Parser::symbol_type {
             return Parser::make_STAR(Parser::location_type());

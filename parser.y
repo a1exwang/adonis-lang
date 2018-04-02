@@ -51,7 +51,7 @@
 %token QUOTE "'";
 %right RIGHT_ARROW
 %right EQ INEQ
-%left LT
+%left LT GT
 %left AND
 %left PLUS
 %left STAR
@@ -211,6 +211,9 @@ exp_op: exp PLUS exp {
       }
     | exp LT exp {
         $$ = std::make_shared<al::ast::ExpCall>("<", std::vector<std::shared_ptr<al::ast::Exp>>({$1, $3}));
+      }
+    | exp GT EQ exp {
+        $$ = std::make_shared<al::ast::ExpCall>(">=", std::vector<std::shared_ptr<al::ast::Exp>>({$1, $4}));
       }
     | exp LT LT exp {
         $$ = std::make_shared<al::ast::ExpCall>("<<", std::vector<std::shared_ptr<al::ast::Exp>>({$1, $4}));

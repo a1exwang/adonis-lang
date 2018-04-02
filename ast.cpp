@@ -313,6 +313,15 @@ namespace al {
             llvm::IntegerType::getInt32Ty(ct.getContext())
         );
       }
+      else if (this->name == ">=") {
+        if (args.size() != 2) { cerr << "'<' only accepts 2 args" << endl; abort(); }
+        vr.value = ct.getCompilerContext().builder->CreateZExt(
+            ct.getCompilerContext().builder->CreateICmp(llvm::CmpInst::Predicate::ICMP_SGE,
+                                                        args[0],
+                                                        args[1]),
+            llvm::IntegerType::getInt32Ty(ct.getContext())
+        );
+      }
       else if (this->name == "!=") {
         if (args.size() != 2) { cerr << "'<' only accepts 2 args" << endl; abort(); }
 
